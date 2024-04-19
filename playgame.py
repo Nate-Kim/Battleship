@@ -22,21 +22,22 @@ def initialize_board():
 # Takes a coordinate and ensures it lies in board range
 def validate_placement(c: str, i: int) -> bool:
   # Checks that the entry is within the grid
-  if (i in range(9) and STR_TO_INT[c] in range(9)): 
+  if (i in range(10) and STR_TO_INT[c] in range(10)): 
     return True
   return False
 
 # Takes coordinate and ship size, returns list of possible swing coordinates
 def get_allowed_swing_points(c: str, i: int, ship_size: int) -> list[str]:
   possible_positions = []
+  # The offset of 2 accounts for only needing to be ship_size-1 spots away from the anchor
   # If right swing is possible, append the right swing coordinate
-  if (i + ship_size < 10): possible_positions.append(c + str(i + ship_size))
+  if (i+ship_size-1 <= 9): possible_positions.append(c + str(i+ship_size-1))
   # If down swing is possible, append the down swing coordinate
-  if (STR_TO_INT[c] + ship_size < 10): possible_positions.append((INT_TO_STR[STR_TO_INT[c] + ship_size]) + str(i))
+  if (STR_TO_INT[c]+ship_size-1 <= 9): possible_positions.append(INT_TO_STR[STR_TO_INT[c]+ship_size-1] + str(i))
   # If left swing is possible, append the left swing coordinate
-  if (i - ship_size < 10): possible_positions.append(c + str(i - ship_size))
+  if (i-ship_size+1 >= 0): possible_positions.append(c + str(i-ship_size+1))
   # If up swing is possible, append the up swing coordinate
-  if (STR_TO_INT[c] - ship_size > 0): possible_positions.append((INT_TO_STR[STR_TO_INT[c] - ship_size]) + str(i))
+  if (STR_TO_INT[c]-ship_size+1 >= 0): possible_positions.append(INT_TO_STR[STR_TO_INT[c]-ship_size+1] + str(i))
   return possible_positions
 
 # Takes coordinate (ex. "A1") and returns ("A", 1)
@@ -53,6 +54,11 @@ def coordinate_to_tuple(s: str):
 class BoardState:
   def __init__(self, state=initialize_board()):
     self.state = state
+
+  def place_anchor(self: "BoardState", c: str, i: int) -> "BoardState":
+    row_choice = STR_TO_INT[c]
+    self.state[row_choice+1][i+1] = '+'
+    return self
 
   def place_ship(self):
     anchor_point = None # String ex. "A1"
@@ -71,10 +77,13 @@ class BoardState:
         if (validate_placement(coordinate_info[0], coordinate_info[1])):
           anchor_point = player_choice
           num_ships_placed += 1
+      # Place the anchor point on the board and show it to the player
+      self.place_anchor(coordinate_info[0], coordinate_info[1])
+      print(self)
       # Get possible secondary points
       allowed_swing_points = get_allowed_swing_points(coordinate_info[0], coordinate_info[1], SHIPS_SIZES[ship])
       while (swing_point == None):
-        print("Choose an second point for your " + ship + ", which has size " + str(SHIPS_SIZES[ship]) + ".")
+        print("Choose a second point for your " + ship + ", which has size " + str(SHIPS_SIZES[ship]) + ".")
         # Should make it possible to reset the anchor
         print("The options are: " + " ".join(allowed_swing_points))
         player_choice = input("Enter your choice here: ")
