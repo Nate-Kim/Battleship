@@ -1,2 +1,13 @@
 # Battleship
-Game playing AI for the board game "Battleship"
+ECS 170 Project
+Names: Alex Din, Ken Lin, Nate Kim, Thomas Chen, Bryan Batsaikhan, Alex Han
+
+Our project will be a research re-implementation of AI in the board game Battleship with the possibility of making improvements where we see fit. The primary research paper that we plan on basing this re-implementation on can be found here. Another helpful resource that we may use can be found here. Our team will be creating an adversarial AI to play against in the game of Battleship. As shown in the research paper(s), there are many different algorithms that can be used and we will be attempting to replicate some of them. Furthermore, if we have the time, our team would like to create a Battleship engine in which the AI will receive input from a human of whether a move is a hit or miss. Then the engine would evaluate the best decision based on its stored state of the board. The human will then act on the decision advised by the AI. 
+
+Battleship is a very fun and simple game that anyone can get into, so implementing an AI has a lot of value. Creating this AI will allow people to play by themselves without needing another person. This also fosters the development of individual skill in the game of Battleship since players are constantly learning from their mistakes. Battleship is a simple game that shows the applicability of AI in games. Furthermore, the value of creating an AI Battleship engine is that it illustrates to a human player how to think about Battleship in order to make the most optimal decisions. The game Battleship can serve as a case example of what the AI algorithms we are testing can accomplish, such as the difference between random guessing and informed guessing.
+
+Three notable algorithms used in the research papers we found are the Monte Carlo tree search (MCTS), a NEAT neural network, and the markov decision process (POMDP). These algorithms (and others) are possible candidates for use in our project. Another possible example would be a heat map which would be used to find the best place to hit on the first move.
+
+In terms of computing resources, our own personal computers should be enough. However, we are considering a neural network implementation of the Battleship AI using the NEAT library, so we may need a cloud computing option to handle the required storage and computing power needed. Amazon Web Service should suffice.  
+
+Our main scaffolding will be either following a guide on how to make a simple Battleship game or finding an already made battleship game on Github to modify in order to accommodate our AI implementation. Both options are viable but we are leaning towards building the game from a guide to have full understanding of our code base since we would have made it ourselves.
