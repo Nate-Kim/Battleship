@@ -33,8 +33,8 @@ def input_to_coordinate(player_input: str):
   return (col, row)
 
 class BoardState:
-  # State is initialized to a 10x10 2D-array of tilde's 
-  #  fog_of_war represents player view of opponent board
+  # state and fog_of_war are initialized to a 10x10 2D-array of tilde's 
+  # fog_of_war represents one player's view of their opponent's board
   def __init__(self, state=None, fog_of_war=None):
     if state is None: state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     if fog_of_war is None: fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
@@ -44,7 +44,7 @@ class BoardState:
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings, eg. "A0"
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
     possible_positions = []
-    swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = True
+    swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
 
     # The offset of 1 accounts for only needing to be ship_size-1 spots away from the anchor
     right_swing_point = anchor_col+(ship_size-1)
@@ -53,45 +53,24 @@ class BoardState:
     up_swing_point = anchor_row-(ship_size-1)
     
     # If down swing is in the grid
-    if (down_swing_point <= 9): 
-      # If a coordinate in the candidate ship space is taken, the swing is not allowed
-      for n in range(anchor_row+1, down_swing_point+1): # Don't want to count anchor as a different ship
-        if (self.state[n][anchor_col] != '~'):
-          swing_down_allowed = False
-    else: 
-      swing_down_allowed = False
-
+    # swing_down_allowed is set to true if all grid spaces from the anchor to swing point are ~
+    if (down_swing_point <= 9): swing_down_allowed = all(self.state[n][anchor_col] == '~' for n in range(anchor_row+1, down_swing_point+1))
     # If right swing is in the grid
-    if (right_swing_point <= 9):
-      # If a coordinate in the candidate ship space is taken, the swing is not allowed
-      for n in range(anchor_col+1, right_swing_point+1):
-        if (self.state[anchor_row][n] != '~'):
-          swing_right_allowed = False
-    else: 
-      swing_right_allowed = False
-
+    # swing_right_allowed is set to true if all grid spaces from the anchor to swing point are ~
+    if (right_swing_point <= 9): swing_right_allowed = all(self.state[anchor_row][n] == '~' for n in range(anchor_col+1, right_swing_point+1))
     # If up swing is in the grid
-    if (up_swing_point >= 0): 
-      # If a coordinate in the candidate ship space is taken, the swing is not allowed
-      for n in range(up_swing_point, anchor_row):
-        if (self.state[n][anchor_col] != '~'):
-          swing_up_allowed = False
-    else: 
-      swing_up_allowed = False
-
+    # swing_up_allowed is set to true if all grid spaces from the anchor to swing point are ~
+    if (up_swing_point >= 0): swing_up_allowed = all(self.state[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
     # If left swing is in the grid
-    if (left_swing_point >= 0): 
-      # If a coordinate in the candidate ship space is taken, the swing is not allowed
-      for n in range(left_swing_point, anchor_col):
-        if (self.state[anchor_row][n] != '~'):
-          swing_left_allowed = False
-    else: 
-      swing_left_allowed = False
+    # swing_left_allowed is set to true if all grid spaces from the anchor to swing point are ~
+    if (left_swing_point >= 0): swing_left_allowed = all(self.state[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
 
+    # Append swing locations depending on if they are allowed
     if (swing_down_allowed): possible_positions.append(INT_TO_STR[down_swing_point] + str(anchor_col))
     if (swing_right_allowed): possible_positions.append(INT_TO_STR[anchor_row] + str(right_swing_point))
     if (swing_up_allowed): possible_positions.append(INT_TO_STR[up_swing_point] + str(anchor_col))
     if (swing_left_allowed): possible_positions.append(INT_TO_STR[anchor_row] + str(left_swing_point))
+
     return possible_positions
 
   # Place down a single ship
