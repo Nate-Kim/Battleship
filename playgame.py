@@ -34,8 +34,14 @@ def input_to_coordinate(player_input: str):
 
 class BoardState:
   # State is initialized to a 10x10 2D-array of tilde's 
-  def __init__(self, state=[['~'] * GRID_SIZE for _ in range(GRID_SIZE)]):
+  #  fog_of_war represents player view of opponent board
+  def __init__(self, state=None, fog_of_war=None):
+    if state is None:
+      state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    if fog_of_war is None:
+      fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.state = state
+    self.fog_of_war = fog_of_war
 
   # Place a PIECE_CHAR on a given grid space to act as anchor
   #  returns the same board if the space is already taken
@@ -102,15 +108,19 @@ class BoardState:
   def place_ship(self, ship: str):
     anchor_point = None # String ex. "A1"
     swing_point = None # String ex. "A1"
+    # Tells the system whether to send an error message above the grid
     invalid_no_swings = False
     invalid_not_two_chars = False
+    invalid_secondary_point = False
+
+    # Breaks when a ship is placed
     while True:
       # Place anchor point
       while anchor_point == None:
-        clear_console()
+        # Print statements
         if invalid_no_swings: print("Invalid anchor point.")
         if invalid_not_two_chars: print("Not a grid coordinate.")
-        print(self)
+        self.print_grid(fog_of_war=False)
         print("Choose an anchor point (ex. A1) for your " + ship + ", which has size " + str(SHIPS_SIZES[ship]) + ".")
         player_choice = input("Enter your choice here: ")
         # Check input length
@@ -121,10 +131,9 @@ class BoardState:
         anchor_coordinate_info = input_to_coordinate(player_choice.upper().strip())
         if (coordinate_in_board(anchor_coordinate_info[0], anchor_coordinate_info[1])):
           anchor_point = player_choice
-
       # Place the anchor point on the board
       self.place_anchor(anchor_coordinate_info[0], anchor_coordinate_info[1])
-      # If there are no possible swing points from the chosen anchor
+      # If there are no possible swing points from the chosen anchor, then reset anchor
       if len(self.get_allowed_swing_points(anchor_coordinate_info[0], anchor_coordinate_info[1], SHIPS_SIZES[ship])) == 0:
         invalid_no_swings = True
         # Set the chosen anchor back to an empty space
@@ -132,23 +141,19 @@ class BoardState:
         # Reset anchor point
         anchor_point = None
         continue
-      clear_console()
-      print(self)
-
       # Get possible secondary points (orientations that are in bounds and do not overlap other ships)
       allowed_swing_points = self.get_allowed_swing_points(anchor_coordinate_info[0], anchor_coordinate_info[1], SHIPS_SIZES[ship])
       while (swing_point == None):
+        # Print statements
+        if invalid_secondary_point: print("Please choose a valid secondary point.")
+        self.print_grid(fog_of_war=False)
         print("Choose a second point for your " + ship + ", which has size " + str(SHIPS_SIZES[ship]) + ".")
         # TO-DO: make it possible to reset the anchor (maybe 00 -> reset anchor)
         print("The options are: " + " ".join(allowed_swing_points))
         player_choice = input("Enter your choice here: ")
+        # If the secondary point is allowed
         if (player_choice.upper().strip() in allowed_swing_points):
           swing_point = player_choice.upper().strip()
-        else:
-          clear_console()
-          print("Please choose a valid secondary point.")
-          print(self)
-
       # Place ship onto board
       swing_coordinate_info = input_to_coordinate(player_choice.upper().strip())
       # Anchor and swing x & y aliases, all in integer form
@@ -160,10 +165,57 @@ class BoardState:
       if a_x == s_x:  # Vertical orientation
         for y in range(min(a_y, s_y), max(a_y, s_y)+1):
           self.state[a_x][y] = PIECE_CHAR
-
-      clear_console()
-      print(self)
       break
+
+  # Choose a coordinate to attack
+  def player_move(self):
+    strike_choice = None
+    invalid_not_two_chars = False
+    invalid_already_chosen = False
+
+    while strike_choice == None:
+      # Print statements
+      if invalid_not_two_chars: print("Not a grid coordinate.")
+      if invalid_already_chosen: print("Pick a different grid location.")
+      print("Choose a position to strike: ")
+      self.print_grid(fog_of_war=True)
+      player_choice = input("Enter your choice here: ")
+      # Process strike choice
+      if (len(player_choice.strip()) != 2): 
+        invalid_not_two_chars = True
+        continue
+      strike_coordinate_info = input_to_coordinate(player_choice)
+      if self.fog_of_war[strike_coordinate_info[0]][strike_coordinate_info[1]] != '~':
+        invalid_already_chosen = True
+        continue
+      else:
+        strike_choice = strike_coordinate_info
+    # Check if the strike hit or missed, X for hit and O for miss on both the fog of war for enemy display and state for self display
+    if self.state[strike_coordinate_info[0]][strike_coordinate_info[1]] == '#': 
+      print("You hit an opponent ship!")
+      self.fog_of_war[strike_coordinate_info[0]][strike_coordinate_info[1]] = 'X'
+      self.state[strike_coordinate_info[0]][strike_coordinate_info[1]] = 'X'
+    if self.state[strike_coordinate_info[0]][strike_coordinate_info[1]] == '~': 
+      print("You missed.")
+      self.fog_of_war[strike_coordinate_info[0]][strike_coordinate_info[1]] = 'O'
+      self.state[strike_coordinate_info[0]][strike_coordinate_info[1]] = 'O'
+
+  # Make a random move on the board
+  def random_move(self):
+    while True:
+      random_row = random.randint(0, GRID_SIZE - 1)
+      random_col = random.randint(0, GRID_SIZE - 1)
+      # Checks fog of war grid to see if the location has yet to be chosen
+      if self.fog_of_war[random_row][random_col] == '~':
+        if self.state[random_row][random_col] == '#': 
+          print("The opponent hit one of your ships!")
+          self.fog_of_war[random_row][random_col] = 'X'
+          self.state[random_row][random_col] = 'X'
+        if self.state[random_row][random_col] == '~': 
+          print("The opponent missed.")
+          self.fog_of_war[random_row][random_col] = 'O'
+          self.state[random_row][random_col] = 'O'
+        break
 
   # Return a random anchor coordinate (for base adversary implementation)
   def random_coordinate(self):
@@ -213,10 +265,13 @@ class BoardState:
       break
 
   # Add labels to the board representation
-  def __str__(self):
+  def print_grid(self, fog_of_war: bool):
     col_titles = [' '] + [str(i) for i in range(GRID_SIZE)]
     row_titles = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-    return " ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)])
+    if fog_of_war:
+      print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
+    else:
+      print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
 
 def main():
   player_grid = BoardState()
@@ -225,6 +280,21 @@ def main():
   AI_grid = BoardState()
   for ship in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship)
+
+  clear_console()
+
+  while True:
+    # Show own grid to player
+    print("Your grid: ")
+    player_grid.print_grid(fog_of_war=False)
+    print("")
+    # Player move executed on opponent's board
+    # This also shows opponent's grid with fog of war
+    AI_grid.player_move() 
+    
+    player_grid.random_move()
+  
+
 
 if __name__ == "__main__":
   main()
