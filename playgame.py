@@ -27,6 +27,8 @@ def input_to_coordinate(player_input: str):
   if not player_input[0].isalpha(): return (-1,-1)
   # Check that the second character is a number
   if not player_input[1].isdigit(): return (-1,-1)
+  # Checks that the input is not out of bounds for the STR_TO_INT dictionary
+  if player_input[0] > "J": return (-1,-1)
   col, row = (STR_TO_INT[player_input[0]], int(player_input[1]))
   # Check that the entry is within the grid
   if col not in range(10) and row not in range(10): return (-1,-1)
@@ -218,6 +220,11 @@ class BoardState:
       # Place ship randomly
       break
 
+  # True if a the board that called it has no more ships left
+  def all_ships_eliminated(self):
+    ship_exists = not any('#' in element for element in self.state)
+    return ship_exists
+
   # Add labels to the board representation
   def print_grid(self, fog_of_war: bool):
     col_titles = [' '] + [str(i) for i in range(GRID_SIZE)]
@@ -230,7 +237,8 @@ class BoardState:
 def main():
   player_grid = BoardState()
   for ship in SHIPS_NAMES:
-    player_grid.place_ship(ship)
+    #player_grid.place_ship(ship)
+    player_grid.randomly_place_ship(ship)
   AI_grid = BoardState()
   for ship in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship)
@@ -241,7 +249,6 @@ def main():
   AI_move_result = "Your moves will appear on the bottom board."
 
   while True:
-    clear_console()
     # Show results of previous turn
     print(player_move_result)
     print(AI_move_result)
@@ -252,6 +259,14 @@ def main():
     # This also shows opponent's grid with fog of war
     player_move_result = AI_grid.player_move() 
     AI_move_result = player_grid.random_move()
+    if player_grid.all_ships_eliminated(): 
+      clear_console()
+      print("YOU LOST")
+      break
+    if AI_grid.all_ships_eliminated(): 
+      clear_console()
+      print("YOU WIN")
+      break
 
 if __name__ == "__main__":
   main()
