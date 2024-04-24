@@ -37,11 +37,19 @@ def input_to_coordinate(player_input: str):
 class BoardState:
   # state and fog_of_war are initialized to a 10x10 2D-array of tilde's 
   # fog_of_war represents one player's view of their opponent's board
-  def __init__(self, state=None, fog_of_war=None):
+  # ships will be an array of arrays, each array holding the grid locations of each segment of each ship
+  #  this is to determine when one player destroys one of their opponent's ships
+  # ships_dict will have a ship name key to access the grid locations of the key ship
+  #  this is to know the name of the ship that is destroyed so that the name can be
+  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None):
     if state is None: state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     if fog_of_war is None: fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    if ships is None: ships = []
+    if ships_dict is None: ships_dict = {}
     self.state = state
     self.fog_of_war = fog_of_war
+    self.ships = ships
+    self.ships_dict = ships_dict
   
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings, eg. "A0"
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
@@ -121,15 +129,23 @@ class BoardState:
         if (INT_TO_STR[input_coordinate[0]] + str(input_coordinate[1]) in valid_swing_points): swing_point = input_coordinate
       swing_row, swing_col = (swing_point[0], swing_point[1])
       # Place ship onto board
+      # Cache ship locations in self.ships to know when a ship gets destroyed
       # Anchor and swing x & y aliases
       a_x, a_y = (anchor_row, anchor_col)
       s_x, s_y = (swing_row, swing_col)
+      ship_coordinates = []
       if a_y == s_y:  # Horizontal orientation
         for x in range(min(a_x, s_x), max(a_x, s_x)+1):
           self.state[x][a_y] = PIECE_CHAR
+          ship_coordinates.append([x,a_y])
       if a_x == s_x:  # Vertical orientation
         for y in range(min(a_y, s_y), max(a_y, s_y)+1):
           self.state[a_x][y] = PIECE_CHAR
+          ship_coordinates.append([a_x,y])
+      # Append list of coordinates to ships array
+      self.ships.append(ship_coordinates)
+      # Append {ship_name: ship_coordinates} to dictionary
+      self.ships_dict.update({ship: ship_coordinates})
       # Ship successfully placed onto board
       break
 
@@ -208,15 +224,23 @@ class BoardState:
       swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
       swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
       
+      # Cache ship locations in self.ships to know when a ship gets destroyed
       # Anchor and swing x & y aliases, all in integer form
       a_x, a_y = (anchor_row, anchor_col)
       s_x, s_y = (swing_row, swing_col)
+      ship_coordinates = []
       if a_y == s_y:  # Horizontal orientation
         for x in range(min(a_x, s_x), max(a_x, s_x)+1):
           self.state[x][a_y] = PIECE_CHAR
+          ship_coordinates.append([x,a_y])
       if a_x == s_x:  # Vertical orientation
         for y in range(min(a_y, s_y), max(a_y, s_y)+1):
           self.state[a_x][y] = PIECE_CHAR
+          ship_coordinates.append([a_x,y])
+      # Append list of coordinates to ships array
+      self.ships.append(ship_coordinates)
+      # Append {ship_name: ship_coordinates} to dictionary
+      self.ships_dict.update({ship: ship_coordinates})
       # Place ship randomly
       break
 
@@ -259,6 +283,31 @@ def main():
     # This also shows opponent's grid with fog of war
     player_move_result = AI_grid.player_move() 
     AI_move_result = player_grid.random_move()
+    # Check if an enemy ship has been sunk from the previous move
+    for ship in AI_grid.ships:
+      ship_still_alive = False
+      for element in ship:
+        if AI_grid.state[element[0]][element[1]] == '#':
+          ship_still_alive = True
+          break
+      if not ship_still_alive:
+        for ship_name in SHIPS_NAMES:
+          if AI_grid.ships_dict[ship_name] == ship:
+            player_move_result = "You sunk the enemy " + ship_name + "!"
+            del AI_grid.ships_dict[ship_name]
+    # Check if a player's ship has been sunk from the previous move
+    for ship in player_grid.ships:
+      ship_still_alive = False
+      for element in ship:
+        if player_grid.state[element[0]][element[1]] == '#':
+          ship_still_alive = True
+          break
+      if not ship_still_alive:
+        for ship_name in SHIPS_NAMES:
+          if AI_grid.ships_dict[ship_name] == ship:
+            player_move_result = "The enemy sunk your " + ship_name + "!"
+            del player_grid.ships_dict[ship_name]
+
     if player_grid.all_ships_eliminated(): 
       clear_console()
       print("YOU LOST")
