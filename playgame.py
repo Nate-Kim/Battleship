@@ -261,8 +261,7 @@ class BoardState:
 def main():
   player_grid = BoardState()
   for ship in SHIPS_NAMES:
-    #player_grid.place_ship(ship)
-    player_grid.randomly_place_ship(ship)
+    player_grid.place_ship(ship)
   AI_grid = BoardState()
   for ship in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship)
