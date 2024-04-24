@@ -260,8 +260,17 @@ class BoardState:
 
 def main():
   player_grid = BoardState()
-  for ship in SHIPS_NAMES:
-    player_grid.place_ship(ship)
+  place_own_ships = None
+  while place_own_ships == None:
+    place_own_ships = input("Would you like to place your own ships (y/n): ")
+    if place_own_ships in ("y", "Y", "Yes", "yes"): 
+      for ship in SHIPS_NAMES:
+        player_grid.place_ship(ship)
+    if place_own_ships in ("n", "N", "No", "no"):
+      for ship in SHIPS_NAMES:
+        player_grid.randomly_place_ship(ship)
+    else:
+      place_own_ships = None
   AI_grid = BoardState()
   for ship in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship)
@@ -273,6 +282,7 @@ def main():
 
   while True:
     # Show results of previous turn
+    clear_console()
     print(player_move_result)
     print(AI_move_result)
     # Show own grid to player
@@ -289,11 +299,11 @@ def main():
         if AI_grid.state[element[0]][element[1]] == '#':
           ship_still_alive = True
           break
+      if ship_still_alive == True: break
       if not ship_still_alive:
         for ship_name in SHIPS_NAMES:
           if AI_grid.ships_dict[ship_name] == ship:
             player_move_result = "You sunk the enemy " + ship_name + "!"
-            del AI_grid.ships_dict[ship_name]
     # Check if a player's ship has been sunk from the previous move
     for ship in player_grid.ships:
       ship_still_alive = False
@@ -301,11 +311,11 @@ def main():
         if player_grid.state[element[0]][element[1]] == '#':
           ship_still_alive = True
           break
+      if ship_still_alive == True: break
       if not ship_still_alive:
         for ship_name in SHIPS_NAMES:
           if AI_grid.ships_dict[ship_name] == ship:
             player_move_result = "The enemy sunk your " + ship_name + "!"
-            del player_grid.ships_dict[ship_name]
 
     if player_grid.all_ships_eliminated(): 
       clear_console()
