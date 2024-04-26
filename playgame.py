@@ -41,15 +41,18 @@ class BoardState:
   #  this is to determine when one player destroys one of their opponent's ships
   # ships_dict will have a ship name key to access the grid locations of the key ship
   #  this is to know the name of the ship that is destroyed so that the name can be
-  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None):
+  # ships_remaining will contain the names of ships that have yet to be sunk
+  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None):
     if state is None: state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     if fog_of_war is None: fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     if ships is None: ships = []
     if ships_dict is None: ships_dict = {}
+    if ships_remaining is None: ships_remaining = SHIPS_NAMES
     self.state = state
     self.fog_of_war = fog_of_war
     self.ships = ships
     self.ships_dict = ships_dict
+    self.ships_remaining = ships_remaining
   
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings, eg. "A0"
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
@@ -302,11 +305,13 @@ def main():
         if AI_grid.state[element[0]][element[1]] == '#':
           ship_still_alive = True
           break
-      if ship_still_alive == True: break
-      if not ship_still_alive:
-        for ship_name in SHIPS_NAMES:
+      if ship_still_alive == True: continue
+      if ship_still_alive == False:
+        for ship_name in AI_grid.ships_remaining:
           if AI_grid.ships_dict[ship_name] == ship:
             player_move_result = "You sunk the enemy " + ship_name + "!"
+            del AI_grid.ships_dict[ship_name]
+            AI_grid.ships_remaining = [x for x in AI_grid.ships_remaining if x != ship_name]
     # Check if a player's ship has been sunk from the previous move
     for ship in player_grid.ships:
       ship_still_alive = False
@@ -315,10 +320,12 @@ def main():
           ship_still_alive = True
           break
       if ship_still_alive == True: break
-      if not ship_still_alive:
-        for ship_name in SHIPS_NAMES:
+      if ship_still_alive == False:
+        for ship_name in AI_grid.ships_remaining:
           if AI_grid.ships_dict[ship_name] == ship:
             player_move_result = "The enemy sunk your " + ship_name + "!"
+            del AI_grid.ships_dict[ship_name]
+            AI_grid.ships_remaining = [x for x in AI_grid.ships_remaining if x != ship_name]
 
     if player_grid.all_ships_eliminated(): 
       clear_console()
