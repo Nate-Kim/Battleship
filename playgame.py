@@ -259,18 +259,21 @@ class BoardState:
       print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
 
 def main():
+  # Initialize the player grid
   player_grid = BoardState()
   place_own_ships = None
-  while place_own_ships == None:
+  ships_placed = False
+  while ships_placed == False:
     place_own_ships = input("Would you like to place your own ships (y/n): ")
     if place_own_ships in ("y", "Y", "Yes", "yes"): 
       for ship in SHIPS_NAMES:
         player_grid.place_ship(ship)
+      ships_placed = True
     if place_own_ships in ("n", "N", "No", "no"):
       for ship in SHIPS_NAMES:
         player_grid.randomly_place_ship(ship)
-    else:
-      place_own_ships = None
+      ships_placed = True
+  # Initialize the adversary grid
   AI_grid = BoardState()
   for ship in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship)
