@@ -18,7 +18,7 @@ def clear_console():
 # Takes any input from the user and makes sure it is a coordinate
 #  returns (-1,-1) if the input is bad
 #  otherwise returns integer coordinate version of the input
-def input_to_coordinate(player_input: str):
+def input_to_coordinate(player_input: str) -> tuple[int, int]:
   # Remove whitespace and make the coordinate upperspace
   player_input = player_input.replace(" ", "").upper()
   # Check that the length of the string is 2
@@ -34,6 +34,7 @@ def input_to_coordinate(player_input: str):
   if col not in range(10) and row not in range(10): return (-1,-1)
   return (col, row)
 
+# Holds all information about a player's board
 class BoardState:
   # state represents a player's view of their own board
   # fog_of_war represents a player's view of their opponent's board
@@ -98,30 +99,30 @@ class BoardState:
       player_choice = input("Enter your choice here: ")
       # Check input
       input_coordinate = input_to_coordinate(player_choice)
-      # If bad input, continue
+      # If bad input, reset the choosing process
       if input_coordinate == (-1,-1): continue
-      if self.state[input_coordinate[0]][input_coordinate[1]] != '~': continue
-      # Else set the anchor point, breaking the while loop
-      anchor_point = input_coordinate
+      # If the anchor is allowed, set it (break the loop)
+      if self.state[input_coordinate[0]][input_coordinate[1]] == '~':
+        anchor_point = input_coordinate
     return anchor_point
 
   # Prompt user to enter a swing point for ship orientation
   def get_swing_point(self, ship: str, valid_swing_points) -> tuple[int, int]:
-    swing_point = None # Will hold a string ex. "A0"
+    # Will hold a string version of the coordinate ex. "A0"
+    swing_point = None
     # Place swing points
     while (swing_point == None):
       # Print statements
       clear_console()
       self.print_grid(fog_of_war=False)
       print("Choose a second point for your " + ship + ", which has size " + str(SHIPS_SIZES[ship]) + ".")
-      # TO-DO: make it possible to reset the anchor (maybe 00 -> reset anchor)
       print("The options are: " + " ".join(valid_swing_points))
       player_choice = input("Enter your choice here: ")
       # Check input
       input_coordinate = input_to_coordinate(player_choice)
-      # If bad input, continue
+      # If bad input, reset the choosing process
       if input_coordinate == (-1,-1): continue
-      # If the secondary point is allowed
+      # If the secondary point is allowed, set it (break the loop)
       if (INT_TO_STR[input_coordinate[0]] + str(input_coordinate[1]) in valid_swing_points): 
         swing_point = input_coordinate
     return swing_point
@@ -129,20 +130,23 @@ class BoardState:
   # Write the ship's characters onto the board
   #  a_x and a_y represent anchor coordinate, s_x and s_y represent swing coordinate
   #  return coordinates that the ship was placed onto
-  def write_ship_to_board(self, a_x, a_y, s_x, s_y):
+  def write_ship_to_board(self, a_x: int, a_y: int, s_x: int, s_y: int) -> None:
+    # Will hold all coordinates of the ship being written to the board
     ship_coordinates = []
-    if a_y == s_y:  # Horizontal orientation
+    # Horizontal orientation
+    if a_y == s_y: 
       for x in range(min(a_x, s_x), max(a_x, s_x)+1):
         self.state[x][a_y] = PIECE_CHAR
         ship_coordinates.append([x,a_y])
-    if a_x == s_x:  # Vertical orientation
+    # Vertical orientation
+    if a_x == s_x:
       for y in range(min(a_y, s_y), max(a_y, s_y)+1):
         self.state[a_x][y] = PIECE_CHAR
         ship_coordinates.append([a_x,y])
     return ship_coordinates
 
   # Place down a single ship
-  def place_ship(self, ship: str):
+  def place_ship(self, ship: str) -> None:
     # Breaks when a ship is placed
     while True:
       # Prompt user to choose an anchor point
@@ -168,7 +172,6 @@ class BoardState:
   #  returns a string depending on whether the move hit a ship
   def player_move(self) -> str:
     strike_choice = None
-
     while strike_choice == None:
       # Print statements
       player_choice = input("Enter your move here: ")
@@ -178,7 +181,6 @@ class BoardState:
       strike_row, strike_col = input_coordinate
       if self.fog_of_war[strike_row][strike_col] != '~': continue
       else: strike_choice = (strike_row, strike_col)
-    
     # Check if the strike hit or missed, X for hit and O for miss on both the fog of war for enemy display and state for self display
     if self.state[strike_row][strike_col] == '#': 
       self.fog_of_war[strike_row][strike_col] = 'X'
@@ -217,7 +219,7 @@ class BoardState:
     return (random_row, random_col)
 
   # Randomly place down a single ship
-  def randomly_place_ship(self, ship: str):
+  def randomly_place_ship(self, ship: str) -> None:
     # Until the ship is properly placed
     while True:
       # Ensured to NOT be on top of a currently placed ship
@@ -243,11 +245,13 @@ class BoardState:
   # Check if a ship has been sunk based on previous move
   #  returns the result of the move if a ship was sunk, otherwise returns an empty string
   def check_ship_sunk(self) -> str:
+    # For each set of locations of ships (goes through all ships)
     for ship_section_locations in self.ships:
-      # Check if there are any ship characters where the ship was
-      alive = any(self.state[ship_section_row][ship_section_col] == '#' 
-                  for ship_section_row, ship_section_col in ship_section_locations)
+      # Check if there are any ship characters where the current ship was
+      alive = any(self.state[ship_section_row][ship_section_col] == '#' for ship_section_row, ship_section_col in ship_section_locations)
+      # If the ship is alive, check the next ship
       if alive: continue
+      # Find the ship that got sunk, delete it from ships_dict and ships_remaining, then 
       for ship_name in self.ships_remaining:
         if self.ships_dict[ship_name] == ship_section_locations:
           del self.ships_dict[ship_name]
@@ -259,10 +263,8 @@ class BoardState:
   def print_grid(self, fog_of_war: bool):
     col_titles = [' '] + [str(i) for i in range(GRID_SIZE)]
     row_titles = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-    if fog_of_war:
-      print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
-    else:
-      print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
+    if fog_of_war: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
+    else: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
 
 def main():
   # Initialize the player grid
