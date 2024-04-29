@@ -44,16 +44,11 @@ class BoardState:
   #  this is to know the name of the ship that is destroyed so that the name can be
   # ships_remaining will contain the names of ships that have yet to be sunk
   def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None):
-    if state is None: state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
-    if fog_of_war is None: fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
-    if ships is None: ships = []
-    if ships_dict is None: ships_dict = {}
-    if ships_remaining is None: ships_remaining = SHIPS_NAMES
-    self.state = state
-    self.fog_of_war = fog_of_war
-    self.ships = ships
-    self.ships_dict = ships_dict
-    self.ships_remaining = ships_remaining
+    self.state = state if state is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.fog_of_war = fog_of_war if fog_of_war is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.ships = ships if ships is not None else []
+    self.ships_dict = {} if ships_dict is None else {k: v[:] for k, v in ships_dict.items()}
+    self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
   
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings, eg. "A0"
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
@@ -198,7 +193,7 @@ class BoardState:
       random_row = random.randint(0, GRID_SIZE - 1)
       random_col = random.randint(0, GRID_SIZE - 1)
       # Checks fog of war grid to see if the location has yet to be chosen
-      if self.fog_of_war[random_row][random_col] == '~':
+      if self.state[random_row][random_col] not in ('X', 'O'):
         if self.state[random_row][random_col] == '#':           
           self.fog_of_war[random_row][random_col] = 'X'
           self.state[random_row][random_col] = 'X'
@@ -207,7 +202,6 @@ class BoardState:
           self.fog_of_war[random_row][random_col] = 'O'
           self.state[random_row][random_col] = 'O'
           return "The opponent missed."
-        break
 
   # Return a random anchor coordinate  not already filled by a ship
   def random_coordinate(self) -> tuple[int, int]:
@@ -245,18 +239,13 @@ class BoardState:
   # Check if a ship has been sunk based on previous move
   #  returns the result of the move if a ship was sunk, otherwise returns an empty string
   def check_ship_sunk(self) -> str:
-    # For each set of locations of ships (goes through all ships)
-    for ship_section_locations in self.ships:
-      # Check if there are any ship characters where the current ship was
-      alive = any(self.state[ship_section_row][ship_section_col] == '#' for ship_section_row, ship_section_col in ship_section_locations)
-      # If the ship is alive, check the next ship
-      if alive: continue
-      # Find the ship that got sunk, delete it from ships_dict and ships_remaining, then 
-      for ship_name in self.ships_remaining:
-        if self.ships_dict[ship_name] == ship_section_locations:
-          del self.ships_dict[ship_name]
-          self.ships_remaining.remove(ship_name)
-          return "You sunk the enemy " + ship_name + "!"
+    # For each pair of name and locations of ships (goes through all ships)
+    for ship_name, ship_locations in self.ships_dict.items():
+      # If the ship has been sunk
+      if all(self.state[row][col] == 'X' for row, col in ship_locations):
+        del self.ships_dict[ship_name]
+        self.ships_remaining.remove(ship_name)
+        return "You sunk the enemy {}!".format(ship_name)
     return ""
 
   # Add labels to the board representation
@@ -293,6 +282,10 @@ def main():
   player_move_result = "Your board is on top and will be updated as your opponent makes moves."
   AI_move_result = "Your moves will appear on the bottom board."
 
+  # Track number of moves for each player
+  count_player = 0
+  count_AI = 0
+
   # Run turns of the game until someone wins
   while True:
     # Show results of previous turn (or help messages if on first turn)
@@ -306,26 +299,31 @@ def main():
     AI_grid.print_grid(fog_of_war=True)
     # Player move executed on opponent's board
     player_move_result = AI_grid.player_move() 
-    AI_move_result = player_grid.random_move()
     # Check if an enemy ship has been sunk from the player's previous move
     ship_sunk_message = AI_grid.check_ship_sunk()
     if ship_sunk_message != "": player_move_result = ship_sunk_message
+    count_player += 1
     # Check if the player has won
     if len(AI_grid.ships_remaining) == 0: 
       clear_console()
-      print("YOU WON\n")
+      print("YOU WON")
+      print("It took you " + str(count_player) + " moves to win.")
       print("Your grid")
       player_grid.print_grid(fog_of_war=False)
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
       break
+    AI_move_result = player_grid.random_move()
     # Check if a friendly ship has been sunk from the opponent's previous move
     ship_sunk_message = player_grid.check_ship_sunk()
     if ship_sunk_message != "": player_move_result = ship_sunk_message
+    count_AI += 1
     # Check if the opponent has won
+    print(f"Len player grid ships remaining: {len(player_grid.ships_remaining)}")
     if len(player_grid.ships_remaining) == 0: 
       clear_console()
-      print("YOU WON\n")
+      print("YOU LOST")
+      print("It took the AI " + str(count_AI) + " moves to win.")
       print("Your grid")
       player_grid.print_grid(fog_of_war=False)
       print("Enemy grid")
