@@ -164,7 +164,7 @@ class BoardState:
       break
 
   # Choose a coordinate to attack
-  #  returns a string depending on whether the move hit a ship
+  #  returns a boolean, True for ship hit or False for ship not hit
   def player_move(self) -> str:
     strike_choice = None
     while strike_choice == None:
@@ -180,15 +180,15 @@ class BoardState:
     if self.state[strike_row][strike_col] == '#': 
       self.fog_of_war[strike_row][strike_col] = 'X'
       self.state[strike_row][strike_col] = 'X'
-      return "You hit an opponent ship!"
+      return True
     if self.state[strike_row][strike_col] == '~': 
       self.fog_of_war[strike_row][strike_col] = 'O'
       self.state[strike_row][strike_col] = 'O'
-      return "You missed."
+      return False
 
   # Make a random move on the board
-  #  returns a string depending on whether the move hit a ship
-  def random_move(self) -> str:
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def random_move(self) -> bool:
     while True:
       random_row = random.randint(0, GRID_SIZE - 1)
       random_col = random.randint(0, GRID_SIZE - 1)
@@ -197,11 +197,21 @@ class BoardState:
         if self.state[random_row][random_col] == '#':           
           self.fog_of_war[random_row][random_col] = 'X'
           self.state[random_row][random_col] = 'X'
-          return "The opponent hit one of your ships!"
+          return True
         if self.state[random_row][random_col] == '~': 
           self.fog_of_war[random_row][random_col] = 'O'
           self.state[random_row][random_col] = 'O'
-          return "The opponent missed."
+          return False
+
+  # Choose a coordinate to attack based on a simulated human style of play
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def player_sim_move(self) -> None:
+    raise NotImplementedError("This function will simulate a human style of play")
+  
+  # Chooses a move based on Monte Carlo Tree Search
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def AI_mcts_move(self) -> None:
+    raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
 
   # Return a random anchor coordinate  not already filled by a ship
   def random_coordinate(self) -> tuple[int, int]:
@@ -245,7 +255,7 @@ class BoardState:
       if all(self.state[row][col] == 'X' for row, col in ship_locations):
         del self.ships_dict[ship_name]
         self.ships_remaining.remove(ship_name)
-        return "You sunk the enemy {}!".format(ship_name)
+        return ship_name
     return ""
 
   # Add labels to the board representation
@@ -298,10 +308,11 @@ def main():
     print("Enemy grid")
     AI_grid.print_grid(fog_of_war=True)
     # Player move executed on opponent's board
-    player_move_result = AI_grid.player_move() 
+    if AI_grid.player_move(): player_move_result = "You hit an enemy ship!"
+    else: player_move_result = "You missed."
     # Check if an enemy ship has been sunk from the player's previous move
-    ship_sunk_message = AI_grid.check_ship_sunk()
-    if ship_sunk_message != "": player_move_result = ship_sunk_message
+    AI_ship_sunk = AI_grid.check_ship_sunk()
+    player_move_result = AI_ship_sunk if AI_ship_sunk != "" else player_move_result
     count_player += 1
     # Check if the player has won
     if len(AI_grid.ships_remaining) == 0: 
@@ -313,13 +324,13 @@ def main():
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
       break
-    AI_move_result = player_grid.random_move()
+    if player_grid.random_move(): AI_move_result = "The opponent has hit one of your ships!"
+    else: AI_move_result = "The opponent missed."
     # Check if a friendly ship has been sunk from the opponent's previous move
-    ship_sunk_message = player_grid.check_ship_sunk()
-    if ship_sunk_message != "": player_move_result = ship_sunk_message
+    player_ship_sunk = player_grid.check_ship_sunk()
+    AI_move_result = player_ship_sunk if player_ship_sunk != "" else AI_move_result
     count_AI += 1
     # Check if the opponent has won
-    print(f"Len player grid ships remaining: {len(player_grid.ships_remaining)}")
     if len(player_grid.ships_remaining) == 0: 
       clear_console()
       print("YOU LOST")
