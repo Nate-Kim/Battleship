@@ -308,11 +308,11 @@ def main():
     print("Enemy grid")
     AI_grid.print_grid(fog_of_war=True)
     # Player move executed on opponent's board
-    if AI_grid.player_move(): player_move_result = "You hit an enemy ship!"
-    else: player_move_result = "You missed."
+    AI_check_ship_hit = AI_grid.player_move()
+    player_move_result = "You hit an enemy ship!" if AI_check_ship_hit else "You missed."
     # Check if an enemy ship has been sunk from the player's previous move
     AI_ship_sunk = AI_grid.check_ship_sunk()
-    player_move_result = AI_ship_sunk if AI_ship_sunk != "" else player_move_result
+    player_move_result = "You sunk the enemy " + AI_ship_sunk + "!" if AI_ship_sunk != "" else player_move_result
     count_player += 1
     # Check if the player has won
     if len(AI_grid.ships_remaining) == 0: 
@@ -324,11 +324,11 @@ def main():
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
       break
-    if player_grid.random_move(): AI_move_result = "The opponent has hit one of your ships!"
-    else: AI_move_result = "The opponent missed."
+    player_check_ship_hit = player_grid.random_move()
+    AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
     # Check if a friendly ship has been sunk from the opponent's previous move
     player_ship_sunk = player_grid.check_ship_sunk()
-    AI_move_result = player_ship_sunk if player_ship_sunk != "" else AI_move_result
+    AI_move_result = "The enemy has sunk your " + player_ship_sunk + "!" if player_ship_sunk != "" else AI_move_result
     count_AI += 1
     # Check if the opponent has won
     if len(player_grid.ships_remaining) == 0: 
