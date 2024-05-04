@@ -316,7 +316,7 @@ def main():
     player_grid.print_grid(fog_of_war=False)
     print("Enemy grid")
     AI_grid.print_grid(fog_of_war=True)
-    
+
     # Player move executed on opponent's board
     AI_check_ship_hit = AI_grid.player_move()
     player_move_result = "You hit an enemy ship!" if AI_check_ship_hit else "You missed."
@@ -338,7 +338,7 @@ def main():
     # Make AI move according to player choice
     if style_choice == 1:
       player_check_ship_hit = player_grid.random_move()
-    elif ai_select == 2:
+    elif style_choice == 2:
       player_check_ship_hit = player_grid.human_sim_move()
     elif style_choice == 3:
       player_check_ship_hit = player_grid.AI_mcts_move()
