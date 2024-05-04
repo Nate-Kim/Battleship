@@ -269,10 +269,6 @@ def main():
   # Initialize the player grid
   player_grid = BoardState()
   ships_placed = False
-  aiSelect = input("1 for random, 2 for even player:")
-  if(aiSelect == "2"):
-    sys.exit("2 not implemented")
-
   while ships_placed == False:
     place_own_ships = input("Would you like to place your own ships (y/n): ")
     # If the player wants to place their own ships
@@ -288,6 +284,17 @@ def main():
   AI_grid = BoardState()
   for ship_name in SHIPS_NAMES:
     AI_grid.randomly_place_ship(ship_name)
+
+  # Player choose form of AI move style
+  style_choice = -1
+  while style_choice == -1:
+    clear_console()
+    print("Select the type of AI you want to play against.")
+    ai_select = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
+    if ai_select == '1':
+      style_choice = 1
+    if(ai_select in ('2','3')):
+      sys.exit("2 and 3 not implemented")
 
   # These messages will appear at the top of the screen during each turn,
   #  so before the first turn there will be some help messages
@@ -309,6 +316,7 @@ def main():
     player_grid.print_grid(fog_of_war=False)
     print("Enemy grid")
     AI_grid.print_grid(fog_of_war=True)
+    
     # Player move executed on opponent's board
     AI_check_ship_hit = AI_grid.player_move()
     player_move_result = "You hit an enemy ship!" if AI_check_ship_hit else "You missed."
@@ -326,11 +334,14 @@ def main():
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
       break
-    #player_check_ship_hit = None;  
-    if(aiSelect == "1"):
+    
+    # Make AI move according to player choice
+    if style_choice == 1:
       player_check_ship_hit = player_grid.random_move()
-    else:
-      sys.exit("invalid choice")
+    elif ai_select == 2:
+      player_check_ship_hit = player_grid.human_sim_move()
+    elif style_choice == 3:
+      player_check_ship_hit = player_grid.AI_mcts_move()
     
     AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
     # Check if a friendly ship has been sunk from the opponent's previous move
