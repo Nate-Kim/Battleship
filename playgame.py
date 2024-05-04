@@ -212,7 +212,14 @@ class BoardState:
     row_titles = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
     if fog_of_war: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
     else: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
-  
+  # Reset the board (for testing AI efficiency)
+  def reset(self) -> None:
+    self.state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.ships = []
+    self.ships_dict = {}
+    self.ships_remaining = list(SHIPS_NAMES)
+
   """MOVE OPTIONS"""
   # Choose a coordinate to attack
   #  returns a boolean, True for ship hit or False for ship not hit
@@ -266,98 +273,151 @@ class BoardState:
     raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
 
 def main():
-  # Initialize the player grid
-  player_grid = BoardState()
-  ships_placed = False
-  while ships_placed == False:
-    place_own_ships = input("Would you like to place your own ships (y/n): ")
-    # If the player wants to place their own ships
-    if place_own_ships in ("y", "Y", "Yes", "yes"): 
-      for ship_name in SHIPS_NAMES: player_grid.place_ship(ship_name)
-      ships_placed = True
-    # If the player wants to a randomly generated layout
-    if place_own_ships in ("n", "N", "No", "no"):
-      for ship_name in SHIPS_NAMES: player_grid.randomly_place_ship(ship_name)
-      ships_placed = True
-  
-  # Initialize the adversary grid
-  AI_grid = BoardState()
-  for ship_name in SHIPS_NAMES:
-    AI_grid.randomly_place_ship(ship_name)
+  # Check whether the user wants to play a game or test the AI
+  play_or_test = -1
+  while play_or_test == -1:
+    print("Would you like to play a game against AI or test AI move efficiencies?")
+    choice = input("Play against AI: 1\nTest efficiencies: 2\n")
+    if choice == '1': play_or_test = 1
+    elif choice == '2': play_or_test = 2
 
-  # Player choose form of AI move style
-  style_choice = -1
-  while style_choice == -1:
-    clear_console()
-    print("Select the type of AI you want to play against.")
-    ai_select = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
-    if ai_select == '1':
-      style_choice = 1
-    if(ai_select in ('2','3')):
-      sys.exit("2 and 3 not implemented")
-
-  # These messages will appear at the top of the screen during each turn,
-  #  so before the first turn there will be some help messages
-  player_move_result = "Your board is on top and will be updated as your opponent makes moves."
-  AI_move_result = "Your moves will appear on the bottom board."
-
-  # Track number of moves for each player
-  count_player = 0
-  count_AI = 0
-
-  # Run turns of the game until someone wins
-  while True:
-    # Show results of previous turn (or help messages if on first turn)
-    clear_console()
-    print(player_move_result)
-    print(AI_move_result)
-    # Show both grids to player with proper fog of war
-    print("Your grid")
-    player_grid.print_grid(fog_of_war=False)
-    print("Enemy grid")
-    AI_grid.print_grid(fog_of_war=True)
-
-    # Player move executed on opponent's board
-    AI_check_ship_hit = AI_grid.player_move()
-    player_move_result = "You hit an enemy ship!" if AI_check_ship_hit else "You missed."
-    # Check if an enemy ship has been sunk from the player's previous move
-    AI_ship_sunk = AI_grid.check_ship_sunk()
-    player_move_result = "You sunk the enemy " + AI_ship_sunk + "!" if AI_ship_sunk != "" else player_move_result
-    count_player += 1
-    # Check if the player has won
-    if len(AI_grid.ships_remaining) == 0: 
+  # If the user wants to test the AI
+  if play_or_test == 2:
+    # Player choose form of AI move style
+    style_choice = -1
+    while style_choice == -1:
       clear_console()
-      print("YOU WON")
-      print("It took you " + str(count_player) + " moves to win.")
+      print("Select the type of AI you want to play against.")
+      choice = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
+      if choice == '1':
+        style_choice = 1
+      if(choice in ('2','3')):
+        sys.exit("2 and 3 not implemented")
+
+    nreps = 100
+    test_grid = BoardState()
+    rep_history = []
+    # Get all simulation data
+    for _ in range(nreps):
+      # Reset the board with new ship placements
+      test_grid.reset()
+      for ship_name in SHIPS_NAMES: test_grid.randomly_place_ship(ship_name)
+      # Reset the number of moves
+      count_AI = 0
+
+      # Simulate a game
+      while True:
+        # Make AI move according to player choice
+        if style_choice == 1:
+          _ = test_grid.random_move()
+        elif style_choice == 2:
+          _ = test_grid.human_sim_move()
+        elif style_choice == 3:
+          _ = test_grid.AI_mcts_move()
+        count_AI += 1
+        _ = test_grid.check_ship_sunk()
+        # Check if the opponent has won
+        if len(test_grid.ships_remaining) == 0: 
+          rep_history.append(count_AI)
+          break
+    clear_console()
+    print(f"It took the AI {sum(rep_history)/nreps} moves on average to win!")
+
+
+  # If the user wants to play against the AI
+  if play_or_test == 1:
+    # Initialize the player grid
+    player_grid = BoardState()
+    ships_placed = False
+    while ships_placed == False:
+      place_own_ships = input("Would you like to place your own ships (y/n): ")
+      # If the player wants to place their own ships
+      if place_own_ships in ("y", "Y", "Yes", "yes"): 
+        for ship_name in SHIPS_NAMES: player_grid.place_ship(ship_name)
+        ships_placed = True
+      # If the player wants to a randomly generated layout
+      if place_own_ships in ("n", "N", "No", "no"):
+        for ship_name in SHIPS_NAMES: player_grid.randomly_place_ship(ship_name)
+        ships_placed = True
+    
+    # Initialize the adversary grid
+    AI_grid = BoardState()
+    for ship_name in SHIPS_NAMES:
+      AI_grid.randomly_place_ship(ship_name)
+
+    # Player choose form of AI move style
+    style_choice = -1
+    while style_choice == -1:
+      clear_console()
+      print("Select the type of AI you want to play against.")
+      choice = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
+      if choice == '1':
+        style_choice = 1
+      if(choice in ('2','3')):
+        sys.exit("2 and 3 not implemented")
+
+    # These messages will appear at the top of the screen during each turn,
+    #  so before the first turn there will be some help messages
+    player_move_result = "Your board is on top and will be updated as your opponent makes moves."
+    AI_move_result = "Your moves will appear on the bottom board."
+
+    # Track number of moves for each player
+    count_player = 0
+    count_AI = 0
+
+    # Run turns of the game until someone wins
+    while True:
+      # Show results of previous turn (or help messages if on first turn)
+      clear_console()
+      print(player_move_result)
+      print(AI_move_result)
+      # Show both grids to player with proper fog of war
       print("Your grid")
       player_grid.print_grid(fog_of_war=False)
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
-      break
-    
-    # Make AI move according to player choice
-    if style_choice == 1:
-      player_check_ship_hit = player_grid.random_move()
-    elif style_choice == 2:
-      player_check_ship_hit = player_grid.human_sim_move()
-    elif style_choice == 3:
-      player_check_ship_hit = player_grid.AI_mcts_move()
-    
-    AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
-    # Check if a friendly ship has been sunk from the opponent's previous move
-    player_ship_sunk = player_grid.check_ship_sunk()
-    AI_move_result = "The enemy has sunk your " + player_ship_sunk + "!" if player_ship_sunk != "" else AI_move_result
-    count_AI += 1
-    # Check if the opponent has won
-    if len(player_grid.ships_remaining) == 0: 
-      clear_console()
-      print("YOU LOST")
-      print("It took the AI " + str(count_AI) + " moves to win.")
-      print("Your grid")
-      player_grid.print_grid(fog_of_war=False)
-      print("Enemy grid")
-      AI_grid.print_grid(fog_of_war=True)
-      break
+
+      # Player move executed on opponent's board
+      AI_check_ship_hit = AI_grid.player_move()
+      player_move_result = "You hit an enemy ship!" if AI_check_ship_hit else "You missed."
+      # Check if an enemy ship has been sunk from the player's previous move
+      AI_ship_sunk = AI_grid.check_ship_sunk()
+      player_move_result = "You sunk the enemy " + AI_ship_sunk + "!" if AI_ship_sunk != "" else player_move_result
+      count_player += 1
+      # Check if the player has won
+      if len(AI_grid.ships_remaining) == 0: 
+        clear_console()
+        print("YOU WON")
+        print("It took you " + str(count_player) + " moves to win.")
+        print("Your grid")
+        player_grid.print_grid(fog_of_war=False)
+        print("Enemy grid")
+        AI_grid.print_grid(fog_of_war=True)
+        break
+      
+      # Make AI move according to player choice
+      if style_choice == 1:
+        player_check_ship_hit = player_grid.random_move()
+      elif style_choice == 2:
+        player_check_ship_hit = player_grid.human_sim_move()
+      elif style_choice == 3:
+        player_check_ship_hit = player_grid.AI_mcts_move()
+      
+      AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
+      # Check if a friendly ship has been sunk from the opponent's previous move
+      player_ship_sunk = player_grid.check_ship_sunk()
+      AI_move_result = "The enemy has sunk your " + player_ship_sunk + "!" if player_ship_sunk != "" else AI_move_result
+      count_AI += 1
+      # Check if the opponent has won
+      if len(player_grid.ships_remaining) == 0: 
+        clear_console()
+        print("YOU LOST")
+        print("It took the AI " + str(count_AI) + " moves to win.")
+        print("Your grid")
+        player_grid.print_grid(fog_of_war=False)
+        print("Enemy grid")
+        AI_grid.print_grid(fog_of_war=True)
+        break
 
 if __name__ == "__main__":
   main()
