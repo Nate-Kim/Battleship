@@ -1,5 +1,6 @@
 import random
 import os
+import sys
 
 GRID_SIZE = 10
 SHIPS_SIZES = {"aircraft carrier": 5, 
@@ -203,10 +204,12 @@ class BoardState:
           self.state[random_row][random_col] = 'O'
           return False
 
-  # Choose a coordinate to attack based on a simulated human style of play
+  # Choose a coordinate to attack based on a simulated human style of play (using the even strategy)
   #  returns a boolean, True for ship hit or False for ship not hit
-  def player_sim_move(self) -> None:
+  def human_sim_move(self) -> None:
     raise NotImplementedError("This function will simulate a human style of play")
+    while True:
+      rand
   
   # Chooses a move based on Monte Carlo Tree Search
   #  returns a boolean, True for ship hit or False for ship not hit
@@ -269,6 +272,10 @@ def main():
   # Initialize the player grid
   player_grid = BoardState()
   ships_placed = False
+  aiSelect = input("1 for random, 2 for even player:")
+  if(aiSelect == "2"):
+    sys.exit("2 not implemented")
+
   while ships_placed == False:
     place_own_ships = input("Would you like to place your own ships (y/n): ")
     # If the player wants to place their own ships
@@ -324,7 +331,12 @@ def main():
       print("Enemy grid")
       AI_grid.print_grid(fog_of_war=True)
       break
-    player_check_ship_hit = player_grid.random_move()
+    #player_check_ship_hit = None;  
+    if(aiSelect == "1"):
+      player_check_ship_hit = player_grid.random_move()
+    else:
+      sys.exit("invalid choice")
+    
     AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
     # Check if a friendly ship has been sunk from the opponent's previous move
     player_ship_sunk = player_grid.check_ship_sunk()
