@@ -75,7 +75,7 @@ class BoardState:
     if (up_swing_point >= 0): swing_up_allowed = all(self.state[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
     # If left swing is in the grid
     # swing_left_allowed is set to true if all grid spaces from the anchor to swing point are ~
-    if (left_swing_point >= 0): swing_left_allowed = all(self.state[n][anchor_col] == '~' for n in range(left_swing_point, anchor_col))
+    if (left_swing_point >= 0): swing_left_allowed = all(self.state[anchor_col][n] == '~' for n in range(left_swing_point, anchor_col))
 
     # Append swing locations depending on if they are allowed
     if (swing_down_allowed): possible_positions.append(INT_TO_STR[down_swing_point] + str(anchor_col))
@@ -87,9 +87,8 @@ class BoardState:
   # Prompt user to enter an anchor point for ship placement, returns tuple of grid coordinates
   #  Example return: (2,4)
   def get_anchor_point(self, ship: str) -> tuple[int, int]:
-    anchor_point = None # Will hold a string ex. "A0"
     # Place anchor point
-    while anchor_point == None:
+    while True:
       # Print statements
       clear_console()
       self.print_grid(fog_of_war=False)
@@ -98,18 +97,12 @@ class BoardState:
       # Check input
       input_coordinate = input_to_coordinate(player_choice)
       # If bad input, reset the choosing process
-      if input_coordinate == (-1,-1): continue
-      # If the anchor is allowed, set it (break the loop)
-      if self.state[input_coordinate[0]][input_coordinate[1]] == '~':
-        anchor_point = input_coordinate
-    return anchor_point
+      if input_coordinate != (-1,-1) and self.state[input_coordinate[0]][input_coordinate[1]] == '~':
+        return input_coordinate
   # Prompt user to enter a swing point for ship orientation, returns tuple of grid coordinates
   #  Example return: (5,1)
   def get_swing_point(self, ship: str, valid_swing_points) -> tuple[int, int]:
-    # Will hold a string version of the coordinate ex. "A0"
-    swing_point = None
-    # Place swing points
-    while (swing_point == None):
+    while True:
       # Print statements
       clear_console()
       self.print_grid(fog_of_war=False)
@@ -119,11 +112,8 @@ class BoardState:
       # Check input
       input_coordinate = input_to_coordinate(player_choice)
       # If bad input, reset the choosing process
-      if input_coordinate == (-1,-1): continue
-      # If the secondary point is allowed, set it (break the loop)
-      if (INT_TO_STR[input_coordinate[0]] + str(input_coordinate[1]) in valid_swing_points): 
-        swing_point = input_coordinate
-    return swing_point
+      if input_coordinate != (-1,-1) and (INT_TO_STR[input_coordinate[0]] + str(input_coordinate[1]) in valid_swing_points):
+        return input_coordinate
 
   """SHIP PLACEMENT"""
   # Place down a single ship
@@ -153,13 +143,13 @@ class BoardState:
     # Until the ship is properly placed
     while True:
       # Get a coordinate value not on top of a ship
-      coordinate_value = '#'
-      while coordinate_value == '#':
+      while True:
         random_row = random.randint(0, GRID_SIZE - 1)
         random_col = random.randint(0, GRID_SIZE - 1)
-        coordinate_value = self.state[random_row][random_col]
-      # Ensured to NOT be on top of a currently placed ship
-      anchor_row, anchor_col = (random_row, random_col)
+        if self.state[random_row][random_col] != '#':
+          # Found a coordinate not on top of a ship
+          anchor_row, anchor_col = random_row, random_col
+          break
       # Get allowed swing points (orientations that are in bounds and do not overlap other ships) from the chosen anchor
       valid_swing_points = self.get_allowed_swing_points(anchor_row, anchor_col, SHIPS_SIZES[ship])
       # If there are no possible swing points from the chosen anchor, then reset anchor
