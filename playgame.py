@@ -12,6 +12,12 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
+"""GLOBAL VARIABLES FOR HUMAN AI"""
+rowNum = 0
+colNum = 0
+targetStack = []
+targetMode = False
+destroyMode = False
 
 def clear_console():
   os.system('cls' if os.name == 'nt' else 'clear')
@@ -251,10 +257,116 @@ class BoardState:
           return False
   # Choose a coordinate to attack based on a simulated human style of play (using the even strategy)
   #  returns a boolean, True for ship hit or False for ship not hit
+  def next_tile(self) -> None:
+    global colNum
+    global rowNum
+
+    colNum +=2
+    if colNum > 9:
+      rowNum += 1
+      if rowNum % 2 == 0:
+        colNum = 0
+      else:
+        colNum = 1
   def human_sim_move(self) -> bool:
-    raise NotImplementedError("This function will simulate a human style of play")
-    while True:
-      rand
+    # raise NotImplementedError("This function will simulate a human style of play")
+    global rowNum
+    global colNum
+    global targetMode
+    global destroyMode
+    global targetStack
+
+    if (targetMode):
+      print("target\n")
+      while(True):
+        move = targetStack.pop()
+        if self.state[move[0]][move[1]] not in ('X', 'O'):
+          if self.state[move[0]][move[1]] == '#':
+            self.fog_of_war[move[0]][move[1]] = 'X'
+            self.state[move[0]][move[1]] = 'X'
+            if (move[2] == "up"):
+              if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
+                targetStack.append((move[0] + 1, move[1], "down"))
+              if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
+                targetStack.append((move[0] - 1, move[1], "up"))
+            elif (move[2] == "down"):
+              if (move[0] - 1 >= 0  and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
+                targetStack.append((move[0] - 1, move[1], "up"))
+              if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
+                targetStack.append((move[0] + 1, move[1], "down"))
+            elif (move[2] == "left"):
+              if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
+                targetStack.append((move[0], move[1] + 1, "right"))
+              if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
+                targetStack.append((move[0], move[1] - 1, "left"))
+            else:  # right
+              if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
+                targetStack.append((move[0], move[1] - 1, "left"))
+              if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
+                targetStack.append((move[0], move[1] + 1, "right"))
+            targetMode = False
+            destroyMode = True
+            return True
+          else:  # is ~
+            self.fog_of_war[move[0]][move[1]] = 'O'
+            self.state[move[0]][move[1]] = 'O'
+            return False
+    elif (destroyMode):
+      move = targetStack.pop()
+      if self.state[move[0]][move[1]] not in ('X', 'O'):
+        if self.state[move[0]][move[1]] == '#':
+          self.fog_of_war[move[0]][move[1]] = 'X'
+          self.state[move[0]][move[1]] = 'X'
+          if (move[2] == "up"):
+            if (move[0] - 1 >= 0):
+              targetStack.append((move[0] - 1, move[1], "up"))
+          elif (move[2] == "down"):
+            if (move[0] + 1 <= 9):
+              targetStack.append((move[0] + 1, move[1], "down"))
+          elif (move[2] == "left"):
+            if (move[1] - 1 >= 0):
+              targetStack.append((move[0], move[1] - 1, "left"))
+          else:  # right
+            if (move[1] + 1 <= 9):
+              targetStack.append((move[0], move[1] + 1, "right"))
+          result = self.check_ship_sunk()  
+          if (result != ""):
+            destroyMode = False
+            targetStack[:] = [] #clear list
+          return True
+      else:  # miss
+        self.fog_of_war[move[0]][move[1]] = 'O'
+        self.state[move[0]][move[1]] = 'O'
+        return False
+    else:
+      print("hunt\n")
+      while(True):
+        if self.state[rowNum][colNum] not in ('X', 'O'):
+          if self.state[rowNum][colNum] == '#':
+            self.fog_of_war[rowNum][colNum] = 'X'
+            self.state[rowNum][colNum] = 'X'
+            targetMode = True
+            # above tile
+            if (rowNum - 1 >= 0):
+              targetStack.append((rowNum - 1, colNum, "up"))
+            # below tile
+            if (rowNum + 1 <= 9):
+              targetStack.append((rowNum + 1, colNum, "down"))
+            # left tile
+            if (colNum - 1 >= 0):
+              targetStack.append((rowNum, colNum - 1, "left"))
+            # right tile
+            if (colNum + 1 <= 9):
+              targetStack.append((rowNum, colNum + 1, "right"))
+            return True
+          if self.state[rowNum][colNum] == '~':
+            self.fog_of_war[rowNum][colNum] = 'O'
+            self.state[rowNum][colNum] = 'O'
+            self.next_tile()
+            return False
+        
+        self.next_tile()
+
   # Chooses a move based on Monte Carlo Tree Search
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
