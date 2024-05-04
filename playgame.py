@@ -51,7 +51,9 @@ class BoardState:
     self.ships_dict = {} if ships_dict is None else {k: v[:] for k, v in ships_dict.items()}
     self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
   
-  # Takes coordinate and ship size, returns list of possible swing coordinates as strings, eg. "A0"
+  """SHIP PLACEMENT HELPERS"""
+  # Takes coordinate and ship size, returns list of possible swing coordinates as strings
+  #  Example return: ["A0", "J4", "B2"]
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
     possible_positions = []
     swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
@@ -73,7 +75,7 @@ class BoardState:
     if (up_swing_point >= 0): swing_up_allowed = all(self.state[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
     # If left swing is in the grid
     # swing_left_allowed is set to true if all grid spaces from the anchor to swing point are ~
-    if (left_swing_point >= 0): swing_left_allowed = all(self.state[n][anchor_col] == '~' for n in range(left_swing_point, anchor_col))# fix the incorrectly overlapping issue
+    if (left_swing_point >= 0): swing_left_allowed = all(self.state[n][anchor_col] == '~' for n in range(left_swing_point, anchor_col))
 
     # Append swing locations depending on if they are allowed
     if (swing_down_allowed): possible_positions.append(INT_TO_STR[down_swing_point] + str(anchor_col))
@@ -82,8 +84,8 @@ class BoardState:
     if (swing_left_allowed): possible_positions.append(INT_TO_STR[anchor_row] + str(left_swing_point))
 
     return possible_positions
-
-  # Prompt user to enter an anchor point for ship placement
+  # Prompt user to enter an anchor point for ship placement, returns tuple of grid coordinates
+  #  Example return: (2,4)
   def get_anchor_point(self, ship: str) -> tuple[int, int]:
     anchor_point = None # Will hold a string ex. "A0"
     # Place anchor point
@@ -101,8 +103,8 @@ class BoardState:
       if self.state[input_coordinate[0]][input_coordinate[1]] == '~':
         anchor_point = input_coordinate
     return anchor_point
-
-  # Prompt user to enter a swing point for ship orientation
+  # Prompt user to enter a swing point for ship orientation, returns tuple of grid coordinates
+  #  Example return: (5,1)
   def get_swing_point(self, ship: str, valid_swing_points) -> tuple[int, int]:
     # Will hold a string version of the coordinate ex. "A0"
     swing_point = None
@@ -123,24 +125,7 @@ class BoardState:
         swing_point = input_coordinate
     return swing_point
 
-  # Write the ship's characters onto the board
-  #  a_x and a_y represent anchor coordinate, s_x and s_y represent swing coordinate
-  #  return coordinates that the ship was placed onto
-  def write_ship_to_board(self, a_x: int, a_y: int, s_x: int, s_y: int) -> None:
-    # Will hold all coordinates of the ship being written to the board
-    ship_coordinates = []
-    # Horizontal orientation
-    if a_y == s_y: 
-      for x in range(min(a_x, s_x), max(a_x, s_x)+1):
-        self.state[x][a_y] = PIECE_CHAR
-        ship_coordinates.append([x,a_y])
-    # Vertical orientation
-    if a_x == s_x:
-      for y in range(min(a_y, s_y), max(a_y, s_y)+1):
-        self.state[a_x][y] = PIECE_CHAR
-        ship_coordinates.append([a_x,y])
-    return ship_coordinates
-
+  """SHIP PLACEMENT"""
   # Place down a single ship
   def place_ship(self, ship: str) -> None:
     # Breaks when a ship is placed
@@ -163,10 +148,75 @@ class BoardState:
       self.ships_dict.update({ship: ship_coordinates})
       # Ship successfully placed onto board
       break
+  # Randomly place down a single ship
+  def randomly_place_ship(self, ship: str) -> None:
+    # Until the ship is properly placed
+    while True:
+      # Get a coordinate value not on top of a ship
+      coordinate_value = '#'
+      while coordinate_value == '#':
+        random_row = random.randint(0, GRID_SIZE - 1)
+        random_col = random.randint(0, GRID_SIZE - 1)
+        coordinate_value = self.state[random_row][random_col]
+      # Ensured to NOT be on top of a currently placed ship
+      anchor_row, anchor_col = (random_row, random_col)
+      # Get allowed swing points (orientations that are in bounds and do not overlap other ships) from the chosen anchor
+      valid_swing_points = self.get_allowed_swing_points(anchor_row, anchor_col, SHIPS_SIZES[ship])
+      # If there are no possible swing points from the chosen anchor, then reset anchor
+      if len(valid_swing_points) == 0: continue
+      # Place the anchor point on the board
+      self.state[anchor_row][anchor_col] = PIECE_CHAR
+      # Set secondary point (orientations that are in bounds and do not overlap other ships)
+      swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
+      swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
+      # Place ship onto board, set ship_coordinates to list of grid locations that ship was placed into
+      ship_coordinates = self.write_ship_to_board(anchor_row, anchor_col, swing_row, swing_col)
+      # Append list of coordinates to ships array
+      self.ships.append(ship_coordinates)
+      # Append {ship_name: ship_coordinates} to dictionary
+      self.ships_dict.update({ship: ship_coordinates})
+      # Ship successfully placed onto board
+      break
 
+  """MISC FUNCTIONS"""
+  # Write the ship's characters onto the board
+  #  a_x and a_y represent anchor coordinate, s_x and s_y represent swing coordinate
+  def write_ship_to_board(self, a_x: int, a_y: int, s_x: int, s_y: int) -> None:
+    # Will hold all coordinates of the ship being written to the board
+    ship_coordinates = []
+    # Horizontal orientation
+    if a_y == s_y: 
+      for x in range(min(a_x, s_x), max(a_x, s_x)+1):
+        self.state[x][a_y] = PIECE_CHAR
+        ship_coordinates.append([x,a_y])
+    # Vertical orientation
+    if a_x == s_x:
+      for y in range(min(a_y, s_y), max(a_y, s_y)+1):
+        self.state[a_x][y] = PIECE_CHAR
+        ship_coordinates.append([a_x,y])
+    return ship_coordinates
+  # Check if a ship has been sunk based on previous move
+  #  returns the name of the sunk ship, if no sinks returns an empty string
+  def check_ship_sunk(self) -> str:
+    # For each pair of name and locations of ships (goes through all ships)
+    for ship_name, ship_locations in self.ships_dict.items():
+      # If the ship has been sunk
+      if all(self.state[row][col] == 'X' for row, col in ship_locations):
+        del self.ships_dict[ship_name]
+        self.ships_remaining.remove(ship_name)
+        return ship_name
+    return ""
+  # Add labels to the board representation
+  def print_grid(self, fog_of_war: bool) -> None:
+    col_titles = [' '] + [str(i) for i in range(GRID_SIZE)]
+    row_titles = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    if fog_of_war: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
+    else: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
+  
+  """MOVE OPTIONS"""
   # Choose a coordinate to attack
   #  returns a boolean, True for ship hit or False for ship not hit
-  def player_move(self) -> str:
+  def player_move(self) -> bool:
     strike_choice = None
     while strike_choice == None:
       # Print statements
@@ -186,7 +236,6 @@ class BoardState:
       self.fog_of_war[strike_row][strike_col] = 'O'
       self.state[strike_row][strike_col] = 'O'
       return False
-
   # Make a random move on the board
   #  returns a boolean, True for ship hit or False for ship not hit
   def random_move(self) -> bool:
@@ -216,58 +265,6 @@ class BoardState:
   def AI_mcts_move(self) -> None:
     raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
 
-  # Return a random anchor coordinate  not already filled by a ship
-  def random_coordinate(self) -> tuple[int, int]:
-    coordinate_value = '#'
-    while coordinate_value == '#':
-      random_row = random.randint(0, GRID_SIZE - 1)
-      random_col = random.randint(0, GRID_SIZE - 1)
-      coordinate_value = self.state[random_row][random_col]
-    return (random_row, random_col)
-
-  # Randomly place down a single ship
-  def randomly_place_ship(self, ship: str) -> None:
-    # Until the ship is properly placed
-    while True:
-      # Ensured to NOT be on top of a currently placed ship
-      anchor_row, anchor_col = self.random_coordinate()
-      # Get allowed swing points (orientations that are in bounds and do not overlap other ships) from the chosen anchor
-      valid_swing_points = self.get_allowed_swing_points(anchor_row, anchor_col, SHIPS_SIZES[ship])
-      # If there are no possible swing points from the chosen anchor, then reset anchor
-      if len(valid_swing_points) == 0: continue
-      # Place the anchor point on the board
-      self.state[anchor_row][anchor_col] = PIECE_CHAR
-      # Set secondary point (orientations that are in bounds and do not overlap other ships)
-      swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
-      swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
-      # Place ship onto board, set ship_coordinates to list of grid locations that ship was placed into
-      ship_coordinates = self.write_ship_to_board(anchor_row, anchor_col, swing_row, swing_col)
-      # Append list of coordinates to ships array
-      self.ships.append(ship_coordinates)
-      # Append {ship_name: ship_coordinates} to dictionary
-      self.ships_dict.update({ship: ship_coordinates})
-      # Ship successfully placed onto board
-      break
-
-  # Check if a ship has been sunk based on previous move
-  #  returns the result of the move if a ship was sunk, otherwise returns an empty string
-  def check_ship_sunk(self) -> str:
-    # For each pair of name and locations of ships (goes through all ships)
-    for ship_name, ship_locations in self.ships_dict.items():
-      # If the ship has been sunk
-      if all(self.state[row][col] == 'X' for row, col in ship_locations):
-        del self.ships_dict[ship_name]
-        self.ships_remaining.remove(ship_name)
-        return ship_name
-    return ""
-
-  # Add labels to the board representation
-  def print_grid(self, fog_of_war: bool):
-    col_titles = [' '] + [str(i) for i in range(GRID_SIZE)]
-    row_titles = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-    if fog_of_war: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.fog_of_war[i]) for i in range(GRID_SIZE)]))
-    else: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
-
 def main():
   # Initialize the player grid
   player_grid = BoardState()
@@ -280,13 +277,11 @@ def main():
     place_own_ships = input("Would you like to place your own ships (y/n): ")
     # If the player wants to place their own ships
     if place_own_ships in ("y", "Y", "Yes", "yes"): 
-      for ship_name in SHIPS_NAMES:
-        player_grid.place_ship(ship_name)
+      for ship_name in SHIPS_NAMES: player_grid.place_ship(ship_name)
       ships_placed = True
     # If the player wants to a randomly generated layout
     if place_own_ships in ("n", "N", "No", "no"):
-      for ship_name in SHIPS_NAMES:
-        player_grid.randomly_place_ship(ship_name)
+      for ship_name in SHIPS_NAMES: player_grid.randomly_place_ship(ship_name)
       ships_placed = True
   
   # Initialize the adversary grid
