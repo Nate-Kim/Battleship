@@ -271,7 +271,10 @@ class BoardState:
       else:
         colNum = 1
   def human_sim_move(self) -> bool:
-    # raise NotImplementedError("This function will simulate a human style of play")
+    #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and theb up. 
+    #The improvement is that, after checking right, the ai should check up or down next. It should not check left next because hunt mode
+    #travels left to right, meaning only a 2 tile ship can only fit horizontally  in this checkerboard pattern. However, ships size 2 to 5 
+    #can fit vertically along the initial hit. Thus the ai has a higher chance of hitting a ship part if it chooses a vertical tile.
     global rowNum
     global colNum
     global targetMode
