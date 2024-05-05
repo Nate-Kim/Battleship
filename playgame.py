@@ -12,12 +12,14 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
+
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
 colNum = 0
 targetStack = []
 targetMode = False
 destroyMode = False
+humanSimSunkResult = ""
 
 def clear_console():
   os.system('cls' if os.name == 'nt' else 'clear')
@@ -275,69 +277,71 @@ class BoardState:
     global targetMode
     global destroyMode
     global targetStack
+    global humanSimSunkResult
+
+    if (humanSimSunkResult != ""):
+      destroyMode = False
+      targetStack[:] = [] #clear list
+      humanSimSunkResult = ""
 
     if (targetMode):
       print("target\n")
-      while(True):
-        move = targetStack.pop()
-        if self.state[move[0]][move[1]] not in ('X', 'O'):
-          if self.state[move[0]][move[1]] == '#':
-            self.fog_of_war[move[0]][move[1]] = 'X'
-            self.state[move[0]][move[1]] = 'X'
-            if (move[2] == "up"):
-              if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
-                targetStack.append((move[0] + 1, move[1], "down"))
-              if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
-                targetStack.append((move[0] - 1, move[1], "up"))
-            elif (move[2] == "down"):
-              if (move[0] - 1 >= 0  and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
-                targetStack.append((move[0] - 1, move[1], "up"))
-              if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
-                targetStack.append((move[0] + 1, move[1], "down"))
-            elif (move[2] == "left"):
-              if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
-                targetStack.append((move[0], move[1] + 1, "right"))
-              if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
-                targetStack.append((move[0], move[1] - 1, "left"))
-            else:  # right
-              if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
-                targetStack.append((move[0], move[1] - 1, "left"))
-              if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
-                targetStack.append((move[0], move[1] + 1, "right"))
-            targetMode = False
-            destroyMode = True
-            return True
-          else:  # is ~
-            self.fog_of_war[move[0]][move[1]] = 'O'
-            self.state[move[0]][move[1]] = 'O'
-            return False
-    elif (destroyMode):
       move = targetStack.pop()
       if self.state[move[0]][move[1]] not in ('X', 'O'):
         if self.state[move[0]][move[1]] == '#':
           self.fog_of_war[move[0]][move[1]] = 'X'
           self.state[move[0]][move[1]] = 'X'
           if (move[2] == "up"):
-            if (move[0] - 1 >= 0):
+            if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
               targetStack.append((move[0] - 1, move[1], "up"))
           elif (move[2] == "down"):
-            if (move[0] + 1 <= 9):
+            if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
               targetStack.append((move[0] + 1, move[1], "down"))
           elif (move[2] == "left"):
-            if (move[1] - 1 >= 0):
+            if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
               targetStack.append((move[0], move[1] - 1, "left"))
           else:  # right
-            if (move[1] + 1 <= 9):
+            if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
               targetStack.append((move[0], move[1] + 1, "right"))
-          result = self.check_ship_sunk()  
-          if (result != ""):
-            destroyMode = False
-            targetStack[:] = [] #clear list
+          targetMode = False
+          destroyMode = True
           return True
-      else:  # miss
-        self.fog_of_war[move[0]][move[1]] = 'O'
-        self.state[move[0]][move[1]] = 'O'
-        return False
+        else:  # is ~
+          self.fog_of_war[move[0]][move[1]] = 'O'
+          self.state[move[0]][move[1]] = 'O'
+          return False
+    elif (destroyMode):
+      while(True):
+        isAppended = False
+        move = targetStack.pop()
+        if self.state[move[0]][move[1]] not in ('O'):
+          if (move[2] == "up"):
+            if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('O')):
+              targetStack.append((move[0] - 1, move[1], "up"))
+              isAppended = True
+          elif (move[2] == "down"):
+            if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('O')):
+              targetStack.append((move[0] + 1, move[1], "down"))
+              isAppended = True
+          elif (move[2] == "left"):
+            if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('O')):
+              targetStack.append((move[0], move[1] - 1, "left"))
+              isAppended = True
+          else:  # right
+            if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('O')):
+              targetStack.append((move[0], move[1] + 1, "right"))
+              isAppended = True
+          if self.state[move[0]][move[1]] not in ('X'):
+            if self.state[move[0]][move[1]] == '#':
+              self.fog_of_war[move[0]][move[1]] = 'X'
+              self.state[move[0]][move[1]] = 'X'
+              return True
+            else:  # miss
+              self.fog_of_war[move[0]][move[1]] = 'O'
+              self.state[move[0]][move[1]] = 'O'
+              if(isAppended):
+                targetStack.pop() # remove latest append since we have discovered the current move is a miss
+              return False
     else:
       print("hunt\n")
       while(True):
@@ -347,16 +351,16 @@ class BoardState:
             self.state[rowNum][colNum] = 'X'
             targetMode = True
             # above tile
-            if (rowNum - 1 >= 0):
+            if (rowNum - 1 >= 0 and self.state[rowNum - 1][colNum] not in ('X', 'O')):
               targetStack.append((rowNum - 1, colNum, "up"))
             # below tile
-            if (rowNum + 1 <= 9):
+            if (rowNum + 1 <= 9 and self.state[rowNum + 1][colNum] not in ('X', 'O')):
               targetStack.append((rowNum + 1, colNum, "down"))
             # left tile
-            if (colNum - 1 >= 0):
+            if (colNum - 1 >= 0 and self.state[rowNum][colNum - 1] not in ('X', 'O')):
               targetStack.append((rowNum, colNum - 1, "left"))
             # right tile
-            if (colNum + 1 <= 9):
+            if (colNum + 1 <= 9 and self.state[rowNum][colNum + 1] not in ('X', 'O')):
               targetStack.append((rowNum, colNum + 1, "right"))
             return True
           if self.state[rowNum][colNum] == '~':
@@ -469,6 +473,7 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   AI_grid.print_grid(fog_of_war=True)
 
 def main():
+  global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
   
@@ -522,7 +527,9 @@ def main():
       player_check_ship_hit = player_grid.gen_AI_move(style_choice)
       AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
       # Check if a friendly ship has been sunk from the opponent's previous move
-      player_ship_sunk = player_grid.check_ship_sunk()
+      result = player_grid.check_ship_sunk()
+      humanSimSunkResult = result
+      player_ship_sunk = result
       AI_move_result = "The enemy has sunk your " + player_ship_sunk + "!" if player_ship_sunk != "" else AI_move_result
       count_AI += 1
       # Check if the opponent has won
@@ -553,7 +560,9 @@ def main():
         _ = test_grid.gen_AI_move(style_choice)
         count_AI += 1
         # Needed to update ships_remaining 
-        _ = test_grid.check_ship_sunk()
+        result = test_grid.check_ship_sunk()
+        humanSimSunkResult = result
+        _ = result
         # Check if the AI has won
         if len(test_grid.ships_remaining) == 0: 
           rep_history.append(count_AI)
