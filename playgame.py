@@ -263,13 +263,25 @@ class BoardState:
     global colNum
     global rowNum
 
-    colNum +=2
+    colNum += 2
     if colNum > 9:
       rowNum += 1
       if rowNum % 2 == 0:
         colNum = 0
       else:
         colNum = 1
+  def next_tile_r(self) -> None:
+    global colNum
+    global rowNum
+
+    colNum -= 2
+    if colNum < 0:
+      rowNum -= 1
+      if rowNum % 2 == 1:
+        colNum = 9
+      else:
+        colNum = 8
+
   def human_sim_move(self) -> bool:
     #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and then up.
     #It is more efficient to check either vertical after checking right.
@@ -347,7 +359,7 @@ class BoardState:
               if(isAppended):
                 targetStack.pop() # remove latest append since we have discovered the current move is a miss
               return False
-    else:
+    else: #this is the search pattern. Hits tiles in a checkerboard style
       print("hunt\n")
       while(True):
         if self.state[rowNum][colNum] not in ('X', 'O'):
