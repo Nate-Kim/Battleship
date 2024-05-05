@@ -271,22 +271,24 @@ class BoardState:
       else:
         colNum = 1
   def human_sim_move(self) -> bool:
-    #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and theb up. 
-    #The improvement is that, after checking right, the ai should check up or down next. It should not check left next because hunt mode
-    #travels left to right, meaning only a 2 tile ship can only fit horizontally  in this checkerboard pattern. However, ships size 2 to 5 
-    #can fit vertically along the initial hit. Thus the ai has a higher chance of hitting a ship part if it chooses a vertical tile.
+    #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and then up.
+    #It is more efficient to check either vertical after checking right.
+    #This is because hitting in a checkerboard pattern goes left to right in our implementation and the chance that 
+    #a ship size smaller than 3 is on the left of the hit tile after hitting right is smaller than the chance of it being a vertical ship
+    #if we implemented the checkerboard pattern to iterate up down the problem would be the opposite.
     global rowNum
     global colNum
     global targetMode
     global destroyMode
     global targetStack
     global humanSimSunkResult
-
+    #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
       destroyMode = False
       targetStack[:] = [] #clear list
       humanSimSunkResult = ""
-
+    #enabled if the algorithm hits any ship part
+    #adds adjacent tiles to the stack to iterate through
     if (targetMode):
       print("target\n")
       move = targetStack.pop()
@@ -306,7 +308,7 @@ class BoardState:
           else:  # right
             if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
               targetStack.append((move[0], move[1] + 1, "right"))
-          targetMode = False
+          targetMode = False # turns off target mode and enable destroy mode to pop the stack and destroy ship
           destroyMode = True
           return True
         else:  # is ~
@@ -316,7 +318,7 @@ class BoardState:
     elif (destroyMode):
       while(True):
         isAppended = False
-        move = targetStack.pop()
+        move = targetStack.pop() #grabs latest tile and hits
         if self.state[move[0]][move[1]] not in ('O'):
           if (move[2] == "up"):
             if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('O')):
