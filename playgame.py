@@ -259,6 +259,47 @@ class BoardState:
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
+  # Generates all possible positions of all remaining ships and hits position with highest probability of existence
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def AI_probability_move(self) -> bool:
+    # Probabilities of each position start as all 0
+    probability_array = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    if (right_swing_point <= 9): swing_right_allowed = all(self.state[anchor_row][n] == '~' for n in range(anchor_col+1, right_swing_point+1))
+    if (down_swing_point <= 9): swing_down_allowed = all(self.state[n][anchor_col] == '~' for n in range(anchor_row+1, down_swing_point+1))
+    # Loop through every remaining ship name
+    for ship_name in self.ships_remaining:
+      # Get the current ship size
+      current_ship_size = SHIPS_SIZES[ship_name]
+      # Record horizontal oriented possible positions
+      # For each row in the grid
+      for row in range(GRID_SIZE):
+        # Move ship along each possible position, if it hits an X or O then skip over
+        for col in range(GRID_SIZE-current_ship_size):
+          if any(self.state[row][n] in ('X', 'O') for n in range(col, current_ship_size)):
+
+      # Record vertical oriented possible positions
+      # For each col in the grid
+        # Move ship along each possible position, if it hits an X or O then skip over
+
+    strike_choice = None
+    while strike_choice == None:
+      # Print statements
+      player_choice = input("Enter your move here: ")
+      input_coordinate = input_to_coordinate(player_choice)
+      # Process strike choice
+      if input_coordinate == (-1,-1): continue
+      strike_row, strike_col = input_coordinate
+      if self.fog_of_war[strike_row][strike_col] != '~': continue
+      else: strike_choice = (strike_row, strike_col)
+    # Check if the strike hit or missed, X for hit and O for miss on both the fog of war for enemy display and state for self display
+    if self.state[strike_row][strike_col] == '#': 
+      self.fog_of_war[strike_row][strike_col] = 'X'
+      self.state[strike_row][strike_col] = 'X'
+      return True
+    if self.state[strike_row][strike_col] == '~': 
+      self.fog_of_war[strike_row][strike_col] = 'O'
+      self.state[strike_row][strike_col] = 'O'
+      return False
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
   def gen_AI_move(self, style_choice: int) -> bool:
@@ -292,7 +333,7 @@ def choose_AI_type() -> int:
       sys.exit("2 and 3 not implemented")
 
 # Print the user interface for each turn
-def print_UI(player_grid, AI_grid, player_move_result, AI_move_result) -> None:
+def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
   clear_console()
   print(player_move_result)
