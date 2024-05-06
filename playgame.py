@@ -83,7 +83,7 @@ class BoardState:
     if (up_swing_point >= 0): swing_up_allowed = all(self.state[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
     # If left swing is in the grid
     # swing_left_allowed is set to true if all grid spaces from the anchor to swing point are ~
-    if (left_swing_point >= 0): swing_left_allowed = all(self.state[anchor_col][n] == '~' for n in range(left_swing_point, anchor_col))
+    if (left_swing_point >= 0): swing_left_allowed = all(self.state[anchor_row][n] == '~' for n in range(left_swing_point, anchor_col))
 
     # Append swing locations depending on if they are allowed
     if (swing_down_allowed): possible_positions.append(INT_TO_STR[down_swing_point] + str(anchor_col))
