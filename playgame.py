@@ -392,6 +392,45 @@ class BoardState:
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
+  # Generates all possible positions of all remaining ships and hits position with highest probability of existence
+  # This implementation is only optimal in conjunction with the hunt strategy (if not currently hunting a ship, use this)
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def AI_probability_move(self) -> tuple[int, int]:
+    # Probabilities of each position start as all 0
+    probability_array = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+
+    # Loop through every remaining ship name
+    for ship_name in self.ships_remaining:
+      # Get the current ship size
+      current_ship_size = SHIPS_SIZES[ship_name]
+      # Record right swing position and down swing position from current grid point
+      # For each grid location in the grid
+      for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+          # If a right swing is possible check the right swing orientation placement feasibility
+          if col <= GRID_SIZE-current_ship_size:
+            # If all of the grid locations in the current possible position are unchecked, add to probability grid
+            if all(self.fog_of_war[row][col+n] == '~' for n in range(current_ship_size)):
+              for i in range(current_ship_size):
+                probability_array[row][col+i] = probability_array[row][col+i] + 1
+          # If a down swing is possible check the down swing orientation placement feasibility
+          if row <= GRID_SIZE-current_ship_size:
+          # If all of the grid locations in the current possible position are unchecked, add to probability grid
+            if all(self.fog_of_war[row+n][col] == '~' for n in range(current_ship_size)):
+              for i in range(current_ship_size):
+                probability_array[row+i][col] = probability_array[row+i][col] + 1
+    
+    # Get the max probability in the array
+    max_prob = -1
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+          value = probability_array[row][col]
+          if value > max_prob:
+              max_prob = value
+              max_row = row
+              max_col = col
+    return (max_row, max_col)
+            
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
   def gen_AI_move(self, style_choice: int) -> bool:
@@ -426,7 +465,7 @@ def choose_AI_type() -> int:
       sys.exit("3 not implemented")
 
 # Print the user interface for each turn
-def print_UI(player_grid, AI_grid, player_move_result, AI_move_result) -> None:
+def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
   clear_console()
   print(player_move_result)
