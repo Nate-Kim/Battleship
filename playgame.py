@@ -43,6 +43,32 @@ def input_to_coordinate(player_input: str) -> tuple[int, int]:
   # Check that the entry is within the grid
   if col not in range(10) and row not in range(10): return (-1,-1)
   return (col, row)
+#Node class is for building the Monte Carlo tree
+#board_state is the state of the player ships' board
+#parent_moves_available are the moves available given by the parent move
+#parent_move is the move that led to the current node
+#parent_node is the parent node connected to the current node
+class Node:
+  def __init__(self, board_state, parent_moves_available=None, parent_move=None, parent_node=None):
+    self.moves_available = []
+    #if no parent_moves_available is passed, then the for loops store the undiscovered tiles as moves available
+    if parent_moves_available == None:
+      for i in range(GRID_SIZE):
+        for j in range(GRID_SIZE):
+          if board_state[i][j] == '~':
+            self.moves_available.append((i,j))
+    else:
+      #stores the moves available into this node's moves available
+      self.moves_available = parent_moves_available
+    self.payoff = None
+    self.score = None
+    self.visits = 0
+    self.move = parent_move
+    self.parent = parent_node
+    self.children = []
+      
+
+    
 
 # Holds all information about a player's board
 class BoardState:
