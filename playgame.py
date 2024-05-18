@@ -20,6 +20,7 @@ targetStack = []
 targetMode = False
 destroyMode = False
 humanSimSunkResult = ""
+probableHuman = False #boolean variable. True is to do probability strat and false is to do even strat
 
 def clear_console():
   os.system('cls' if os.name == 'nt' else 'clear')
@@ -281,6 +282,20 @@ class BoardState:
         colNum = 9
       else:
         colNum = 8
+  def set_up_target_mode(self, rowNum, colNum) -> None:
+    global targetStack
+    # above tile
+    if (rowNum - 1 >= 0 and self.state[rowNum - 1][colNum] not in ('X', 'O')):
+      targetStack.append((rowNum - 1, colNum, "up"))
+    # below tile
+    if (rowNum + 1 <= 9 and self.state[rowNum + 1][colNum] not in ('X', 'O')):
+      targetStack.append((rowNum + 1, colNum, "down"))
+    # left tile
+    if (colNum - 1 >= 0 and self.state[rowNum][colNum - 1] not in ('X', 'O')):
+      targetStack.append((rowNum, colNum - 1, "left"))
+    # right tile
+    if (colNum + 1 <= 9 and self.state[rowNum][colNum + 1] not in ('X', 'O')):
+      targetStack.append((rowNum, colNum + 1, "right"))
 
   def human_sim_move(self) -> bool:
     #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and then up.
@@ -294,6 +309,7 @@ class BoardState:
     global destroyMode
     global targetStack
     global humanSimSunkResult
+    global probableHuman
     #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
       destroyMode = False
@@ -361,32 +377,34 @@ class BoardState:
               return False
     else: #this is the search pattern. Hits tiles in a checkerboard style
       print("hunt\n")
-      while(True):
-        if self.state[rowNum][colNum] not in ('X', 'O'):
-          if self.state[rowNum][colNum] == '#':
-            self.fog_of_war[rowNum][colNum] = 'X'
-            self.state[rowNum][colNum] = 'X'
-            targetMode = True
-            # above tile
-            if (rowNum - 1 >= 0 and self.state[rowNum - 1][colNum] not in ('X', 'O')):
-              targetStack.append((rowNum - 1, colNum, "up"))
-            # below tile
-            if (rowNum + 1 <= 9 and self.state[rowNum + 1][colNum] not in ('X', 'O')):
-              targetStack.append((rowNum + 1, colNum, "down"))
-            # left tile
-            if (colNum - 1 >= 0 and self.state[rowNum][colNum - 1] not in ('X', 'O')):
-              targetStack.append((rowNum, colNum - 1, "left"))
-            # right tile
-            if (colNum + 1 <= 9 and self.state[rowNum][colNum + 1] not in ('X', 'O')):
-              targetStack.append((rowNum, colNum + 1, "right"))
-            return True
-          if self.state[rowNum][colNum] == '~':
-            self.fog_of_war[rowNum][colNum] = 'O'
-            self.state[rowNum][colNum] = 'O'
-            self.next_tile()
-            return False
+      if probableHuman:
+        decision = self.AI_probability_move()
+        if self.state[decision[0]][decision[1]] == '#':
+          self.fog_of_war[decision[0]][decision[1]] = 'X'
+          self.state[decision[0]][decision[1]] = 'X'
+          targetMode = True
+          self.set_up_target_mode(decision[0], decision[1])
+          return True
+        if self.state[decision[0]][decision[1]] == '~':
+          self.fog_of_war[decision[0]][decision[1]] = 'O'
+          self.state[decision[0]][decision[1]] = 'O'
+          return False   
+      else:
+        while(True):
+          if self.state[rowNum][colNum] not in ('X', 'O'):
+            if self.state[rowNum][colNum] == '#':
+              self.fog_of_war[rowNum][colNum] = 'X'
+              self.state[rowNum][colNum] = 'X'
+              targetMode = True
+              self.set_up_target_mode(rowNum, colNum)
+              return True
+            if self.state[rowNum][colNum] == '~':
+              self.fog_of_war[rowNum][colNum] = 'O'
+              self.state[rowNum][colNum] = 'O'
+              self.next_tile()
+              return False
         
-        self.next_tile()
+          self.next_tile()
 
   # Chooses a move based on Monte Carlo Tree Search
   #  returns a boolean, True for ship hit or False for ship not hit
@@ -459,7 +477,6 @@ def choose_AI_type() -> int:
     choice = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
     if choice == '1': return 1
     if choice == '2': return 2
-    #if choice == '2': return 2
     #if choice == '3': return 3
     if(choice in ('3')):
       sys.exit("3 not implemented")
@@ -490,6 +507,20 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
 
+def human_sim_variant() -> None:
+  global probableHuman
+  while True:
+    clear_console()
+    answer = input("Do you want to use probability strategy?")
+    if answer in ("y", "Y", "Yes", "yes"):
+      probableHuman = True
+      break
+    if answer in ("n", "N", "No", "no"):
+      break #probableHuman is initialized with False
+    
+
+      
+
 def main():
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
@@ -516,6 +547,8 @@ def main():
     # Player choose form of AI move style
 
     style_choice = choose_AI_type()
+    if style_choice == 2:
+      human_sim_variant()
 
     # These messages will appear at the top of the screen during each turn,
     #  so before the first turn there will be some help messages
