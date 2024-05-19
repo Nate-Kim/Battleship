@@ -12,6 +12,7 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
+NREPS = 10
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -66,9 +67,6 @@ class Node:
     self.move = parent_move
     self.parent = parent_node
     self.children = []
-      
-
-    
 
 # Holds all information about a player's board
 class BoardState:
@@ -344,7 +342,6 @@ class BoardState:
     #enabled if the algorithm hits any ship part
     #adds adjacent tiles to the stack to iterate through
     if (targetMode):
-      print("target\n")
       move = targetStack.pop()
       if self.state[move[0]][move[1]] not in ('X', 'O'):
         if self.state[move[0]][move[1]] == '#':
@@ -402,7 +399,6 @@ class BoardState:
                 targetStack.pop() # remove latest append since we have discovered the current move is a miss
               return False
     else: #this is the search pattern. Hits tiles in a checkerboard style
-      print("hunt\n")
       if probableHuman:
         decision = self.AI_probability_move()
         if self.state[decision[0]][decision[1]] == '#':
@@ -482,9 +478,7 @@ class BoardState:
     if style_choice == 2: return self.human_sim_move()
     if style_choice == 3: return self.AI_mcts_move()
 
-
 # Player chooses if they want to play a game or test the AI
-#  play game: 1, test AI: 2
 def choose_play_or_test() -> int:
   while True:
     clear_console()
@@ -492,21 +486,26 @@ def choose_play_or_test() -> int:
     choice = input("Play against AI: 1\nTest efficiencies: 2\n")
     if choice == '1': return 1
     if choice == '2': return 2
-
 # Player chooses which AI they want to play against / test
-#  random moves: 1, simulated player: 2, monte carlo: 3
-def choose_AI_type() -> int:
+def choose_AI_type(choice: int) -> int:
   # Player choose form of AI move style
+  if choice == 1: input_string = "play against"
+  else: input_string = "test"
   while True:
     clear_console()
-    print("Select the type of AI you want to play against.")
-    choice = input("Random moves: 1\nSimulated player: 2\nMonte Carlo AI: 3\n")
+    print(f"Select the type of AI you want to {input_string}.")
+    print("Random moves: 1")
+    print("Simulated player (even strategy): 2")
+    print("Simulated player (probabilistic strategy): 3")
+    print("Monte Carlo Search Tree: 4")
+    choice = input()
     if choice == '1': return 1
     if choice == '2': return 2
-    #if choice == '3': return 3
-    if(choice in ('3')):
-      sys.exit("3 not implemented")
-
+    if choice == '3': 
+      global probableHuman
+      probableHuman = True
+      return 2
+    if choice == '4': sys.exit("Not yet implemented")
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
@@ -518,7 +517,6 @@ def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str)
   player_grid.print_grid(fog_of_war=False)
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
-
 # Print end of game message
 def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -> None:
   clear_console()
@@ -532,20 +530,6 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   player_grid.print_grid(fog_of_war=False)
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
-
-def human_sim_variant() -> None:
-  global probableHuman
-  while True:
-    clear_console()
-    answer = input("Do you want to use probability strategy?")
-    if answer in ("y", "Y", "Yes", "yes"):
-      probableHuman = True
-      break
-    if answer in ("n", "N", "No", "no"):
-      break #probableHuman is initialized with False
-    
-
-      
 
 def main():
   global humanSimSunkResult
@@ -571,10 +555,7 @@ def main():
     for ship_name in SHIPS_NAMES: AI_grid.randomly_place_ship(ship_name)
 
     # Player choose form of AI move style
-
-    style_choice = choose_AI_type()
-    if style_choice == 2:
-      human_sim_variant()
+    style_choice = choose_AI_type(play_or_test)
 
     # These messages will appear at the top of the screen during each turn,
     #  so before the first turn there will be some help messages
@@ -618,10 +599,9 @@ def main():
   # If the user wants to test the AI
   if play_or_test == 2:
     # Player choose form of AI move style
-    #  random moves: 1, simulated player: 2, monte carlo: 3
-    style_choice = choose_AI_type()
+    style_choice = choose_AI_type(play_or_test)
 
-    nreps = 100
+    nreps = NREPS
     test_grid = BoardState()
     # Will hold number of moves for each rep
     rep_history = []
