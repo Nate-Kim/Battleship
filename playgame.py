@@ -237,11 +237,25 @@ class BoardState:
     else: print(" ".join(col_titles) + "\n" + "\n".join([row_titles[i] + " " + " ".join(self.state[i]) for i in range(GRID_SIZE)]))
   # Reset the board (for testing AI efficiency)
   def reset(self) -> None:
+    global rowNum
+    global colNum
+    global targetStack
+    global targetMode
+    global destroyMode
+    global humanSimSunkResult
+
     self.state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = []
     self.ships_dict = {}
     self.ships_remaining = list(SHIPS_NAMES)
+    rowNum = 0
+    colNum = 0
+    targetStack = []
+    targetMode = False
+    destroyMode = False
+    humanSimSunkResult = ""
+    #reset global variables
 
   """MOVE OPTIONS"""
   # Choose a coordinate to attack
