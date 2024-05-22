@@ -18,10 +18,13 @@ NREPS = 10
 rowNum = 0
 colNum = 0
 targetStack = []
+hitMarkers = []
 targetMode = False
 destroyMode = False
+clearHitMarkers = False
 humanSimSunkResult = ""
 probableHuman = False #boolean variable. True is to do probability strat and false is to do even strat
+removeFromStackCount = int
 
 def clear_console():
   os.system('cls' if os.name == 'nt' else 'clear')
@@ -320,21 +323,34 @@ class BoardState:
         colNum = 9
       else:
         colNum = 8
-  def set_up_target_mode(self, rowNum, colNum) -> None:
+  def set_up_target_mode(self, rowNum, colNum) -> int:
     global targetStack
+    count = 0
     # above tile
     if (rowNum - 1 >= 0 and self.state[rowNum - 1][colNum] not in ('X', 'O')):
       targetStack.append((rowNum - 1, colNum, "up"))
+      count += 1
     # below tile
     if (rowNum + 1 <= 9 and self.state[rowNum + 1][colNum] not in ('X', 'O')):
       targetStack.append((rowNum + 1, colNum, "down"))
+      count += 1
     # left tile
     if (colNum - 1 >= 0 and self.state[rowNum][colNum - 1] not in ('X', 'O')):
       targetStack.append((rowNum, colNum - 1, "left"))
+      count += 1
     # right tile
     if (colNum + 1 <= 9 and self.state[rowNum][colNum + 1] not in ('X', 'O')):
       targetStack.append((rowNum, colNum + 1, "right"))
-
+      count += 1
+    return count # count is only for knowing how many choices to remove during clear hit marker stage
+  def check_hit_markers(self) -> int:
+    global hitMarkers
+    marker = hitMarkers.pop()
+    if(marker[2] != "start"):
+      return self.set_up_target_mode(marker[0], marker[1])
+    else:
+      return 0
+    
   def human_sim_move(self) -> bool:
     #POTENTIAL IMPROVEMENT FOR LATER: Currently, target mode checks right, left, down, and then up.
     #It is more efficient to check either vertical after checking right.
@@ -346,12 +362,30 @@ class BoardState:
     global targetMode
     global destroyMode
     global targetStack
+    global hitMarkers
+    global clearHitMarkers
     global humanSimSunkResult
     global probableHuman
+    global removeFromStackCount
     #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
       destroyMode = False
-      targetStack[:] = [] #clear list
+      targetStack.pop() #popping to ge rid of the choice the destroy mode added last call of human_sim_move
+      latestDirection = hitMarkers[len(hitMarkers) -1][2]
+      #since a ship was destroyed, remove all hit markers releated to that destroyed ship
+      i = len(hitMarkers) -1
+      while(i >= 0):
+        if(hitMarkers[i][2] == latestDirection):
+          hitMarkers.pop()
+        else:
+          break
+        i -= 1
+      #hitMarkers.pop() #removing the hitmarker that acts as the pivot point between the two cardinal directions
+      if(len(hitMarkers) == 0): # only clear when there are no more hitmarkers to investigate
+        targetStack[:] = [] #clear list
+      else:
+        clearHitMarkers = True
+        removeFromStackCount = self.check_hit_markers()
       humanSimSunkResult = ""
     #enabled if the algorithm hits any ship part
     #adds adjacent tiles to the stack to iterate through
@@ -361,6 +395,7 @@ class BoardState:
         if self.state[move[0]][move[1]] == '#':
           self.fog_of_war[move[0]][move[1]] = 'X'
           self.state[move[0]][move[1]] = 'X'
+          hitMarkers.append(move)
           if (move[2] == "up"):
             if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
               targetStack.append((move[0] - 1, move[1], "up"))
@@ -405,13 +440,48 @@ class BoardState:
             if self.state[move[0]][move[1]] == '#':
               self.fog_of_war[move[0]][move[1]] = 'X'
               self.state[move[0]][move[1]] = 'X'
+              hitMarkers.append(move)
               return True
             else:  # miss
               self.fog_of_war[move[0]][move[1]] = 'O'
               self.state[move[0]][move[1]] = 'O'
               if(isAppended):
-                targetStack.pop() # remove latest append since we have discovered the current move is a miss
+                #algorithm was certain it can destroy a ship in this particular cardinal direction. So this must mean the algorithm has hit multiple ships lined up together 
+                # remove latest append since we have discovered the current move is a miss 
+                targetStack.pop() 
+                destroyMode = False
+                clearHitMarkers = True
+                removeFromStackCount = self.check_hit_markers()
               return False
+    elif(clearHitMarkers):
+      #behave similar to target mode: pop decisions until a hit is found. Then destroy that ship with destroy mode
+      move = targetStack.pop()
+      if(removeFromStackCount != 0):
+        removeFromStackCount -= 1
+      if(self.state[move[0]][move[1]] == '#'):
+        self.fog_of_war[move[0]][move[1]] = 'X'
+        self.state[move[0]][move[1]] = 'X'
+        hitMarkers.append(move)
+        for i in range(removeFromStackCount):
+          targetStack.pop()
+        if(move[2] == "up"):
+          targetStack.append((move[0] - 1, move[1], "up"))
+        elif(move[2] == "down"):
+          targetStack.append((move[0] + 1, move[1], "down"))
+        elif(move[2] == "left"):
+          targetStack.append((move[0], move[1] - 1, "left"))
+        else: #right
+          targetStack.append((move[0], move[1] + 1, "right"))
+        clearHitMarkers = False
+        destroyMode = True
+        #loop gets rid of choices added by set up target mode during clear hit marker stage since we don't need to consider the other options we haven't popped yet
+
+        return True
+      #is ~
+      self.fog_of_war[move[0]][move[1]] = 'O'
+      self.state[move[0]][move[1]] = 'O'
+      return False
+
     else: #this is the search pattern. Hits tiles in a checkerboard style
       if probableHuman:
         decision = self.AI_probability_move()
@@ -432,6 +502,7 @@ class BoardState:
               self.fog_of_war[rowNum][colNum] = 'X'
               self.state[rowNum][colNum] = 'X'
               targetMode = True
+              hitMarkers.append((rowNum, colNum, "start"))
               self.set_up_target_mode(rowNum, colNum)
               return True
             if self.state[rowNum][colNum] == '~':
