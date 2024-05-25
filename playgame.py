@@ -1,6 +1,7 @@
 import random
 import os
 import sys
+import numpy as np
 
 GRID_SIZE = 10
 SHIPS_SIZES = {"aircraft carrier": 5, 
@@ -86,6 +87,54 @@ class BoardState:
     self.ships = ships if ships is not None else []
     self.ships_dict = {} if ships_dict is None else {k: v[:] for k, v in ships_dict.items()}
     self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
+    self.hit_stack = []
+    self.target_mode = False
+    self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    
+    def AI_tree_move(self) -> bool:
+        if self.target_mode and self.hit_stack:
+            move = self.hit_stack.pop()
+        else:
+            self.target_mode = False
+            while True:
+                move = (random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1))
+                if self.state[move[0]][move[1]] not in ('X', 'O'):
+                    break
+
+        row, col = move
+
+        if self.state[row][col] == '#':
+            self.fog_of_war[row][col] = 'X'
+            self.state[row][col] = 'X'
+            self.target_mode = True
+
+            if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+                self.hit_stack.append((row - 1, col))
+            if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+                self.hit_stack.append((row + 1, col))
+            if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+                self.hit_stack.append((row, col - 1))
+            if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+                self.hit_stack.append((row, col + 1))
+
+            return True
+        else:
+            self.fog_of_war[row][col] = 'O'
+            self.state[row][col] = 'O'
+            return False
+
+    def update_probabilities_after_hit(self, row: int, col: int) -> None:
+        if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+            self.probability_grid[row - 1][col] += 10
+        if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+            self.probability_grid[row + 1][col] += 10
+        if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+            self.probability_grid[row][col - 1] += 10
+        if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+            self.probability_grid[row][col + 1] += 10
+
+    def is_in_bounds(self, row: int, col: int) -> bool:
+        return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
   
   """SHIP PLACEMENT HELPERS"""
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings
@@ -558,10 +607,11 @@ class BoardState:
             
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
-  def gen_AI_move(self, style_choice: int) -> bool:
-    if style_choice == 1: return self.random_move()
-    if style_choice == 2: return self.human_sim_move()
-    if style_choice == 3: return self.AI_mcts_move()
+    def gen_AI_move(self, style_choice: int) -> bool:
+        if style_choice == 1: return self.random_move()
+        if style_choice == 2: return self.human_sim_move()
+        if style_choice == 3: return self.AI_mcts_move()
+        if style_choice == 4: return self.AI_tree_move()
 
 # Player chooses if they want to play a game or test the AI
 def choose_play_or_test() -> int:
@@ -571,26 +621,32 @@ def choose_play_or_test() -> int:
     choice = input("Play against AI: 1\nTest efficiencies: 2\n")
     if choice == '1': return 1
     if choice == '2': return 2
+    
 # Player chooses which AI they want to play against / test
 def choose_AI_type(choice: int) -> int:
-  # Player choose form of AI move style
-  if choice == 1: input_string = "play against"
-  else: input_string = "test"
-  while True:
-    clear_console()
-    print(f"Select the type of AI you want to {input_string}.")
-    print("Random moves: 1")
-    print("Simulated player (even strategy): 2")
-    print("Simulated player (probabilistic strategy): 3")
-    print("Monte Carlo Search Tree: 4")
-    choice = input()
-    if choice == '1': return 1
-    if choice == '2': return 2
-    if choice == '3': 
-      global probableHuman
-      probableHuman = True
-      return 2
-    if choice == '4': sys.exit("Not yet implemented")
+    # Player choose form of AI move style
+    if choice == 1:
+        input_string = "play against"
+    else:
+        input_string = "test"
+    while True:
+        clear_console()
+        print(f"Select the type of AI you want to {input_string}.")
+        print("Random moves: 1")
+        print("Simulated player (even strategy): 2")
+        print("Simulated player (probabilistic strategy): 3")
+        print("Monte Carlo Search Tree: 4")
+        print("Tree move with probability: 5")
+        choice = input()
+        if choice == '1': return 1
+        if choice == '2': return 2
+        if choice == '3':
+            global probableHuman
+            probableHuman = True
+            return 2
+        if choice == '4': return 3
+        if choice == '5': return 4
+    
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
