@@ -90,53 +90,9 @@ class BoardState:
     self.hit_stack = []
     self.target_mode = False
     self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
-    
-    def AI_tree_move(self) -> bool:
-        if self.target_mode and self.hit_stack:
-            move = self.hit_stack.pop()
-        else:
-            self.target_mode = False
-            while True:
-                move = (random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1))
-                if self.state[move[0]][move[1]] not in ('X', 'O'):
-                    break
 
-        row, col = move
-
-        if self.state[row][col] == '#':
-            self.fog_of_war[row][col] = 'X'
-            self.state[row][col] = 'X'
-            self.target_mode = True
-
-            if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
-                self.hit_stack.append((row - 1, col))
-            if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
-                self.hit_stack.append((row + 1, col))
-            if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
-                self.hit_stack.append((row, col - 1))
-            if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
-                self.hit_stack.append((row, col + 1))
-
-            return True
-        else:
-            self.fog_of_war[row][col] = 'O'
-            self.state[row][col] = 'O'
-            return False
-
-    def update_probabilities_after_hit(self, row: int, col: int) -> None:
-        if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
-            self.probability_grid[row - 1][col] += 10
-        if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
-            self.probability_grid[row + 1][col] += 10
-        if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
-            self.probability_grid[row][col - 1] += 10
-        if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
-            self.probability_grid[row][col + 1] += 10
-
-    def is_in_bounds(self, row: int, col: int) -> bool:
-        return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
-  
   """SHIP PLACEMENT HELPERS"""
+  
   # Takes coordinate and ship size, returns list of possible swing coordinates as strings
   #  Example return: ["A0", "J4", "B2"]
   def get_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
@@ -252,6 +208,51 @@ class BoardState:
       self.ships_dict.update({ship: ship_coordinates})
       # Ship successfully placed onto board
       break
+      
+    def AI_tree_move(self) -> bool:
+        if self.target_mode and self.hit_stack:
+            move = self.hit_stack.pop()
+        else:
+            self.target_mode = False
+            while True:
+                move = (random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1))
+                if self.state[move[0]][move[1]] not in ('X', 'O'):
+                    break
+
+        row, col = move
+
+        if self.state[row][col] == '#':
+            self.fog_of_war[row][col] = 'X'
+            self.state[row][col] = 'X'
+            self.target_mode = True
+
+            if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+                self.hit_stack.append((row - 1, col))
+            if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+                self.hit_stack.append((row + 1, col))
+            if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+                self.hit_stack.append((row, col - 1))
+            if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+                self.hit_stack.append((row, col + 1))
+
+            return True
+        else:
+            self.fog_of_war[row][col] = 'O'
+            self.state[row][col] = 'O'
+            return False
+
+    def update_probabilities_after_hit(self, row: int, col: int) -> None:
+        if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+            self.probability_grid[row - 1][col] += 10
+        if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+            self.probability_grid[row + 1][col] += 10
+        if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+            self.probability_grid[row][col - 1] += 10
+        if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+            self.probability_grid[row][col + 1] += 10
+
+    def is_in_bounds(self, row: int, col: int) -> bool:
+        return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
 
   """MISC FUNCTIONS"""
   # Write the ship's characters onto the board
