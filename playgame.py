@@ -53,24 +53,146 @@ def input_to_coordinate(player_input: str) -> tuple[int, int]:
 #parent_moves_available are the moves available given by the parent move
 #parent_move is the move that led to the current node
 #parent_node is the parent node connected to the current node
-class Node:
-  def __init__(self, board_state, parent_moves_available=None, parent_move=None, parent_node=None):
-    self.moves_available = []
-    #if no parent_moves_available is passed, then the for loops store the undiscovered tiles as moves available
-    if parent_moves_available == None:
-      for i in range(GRID_SIZE):
-        for j in range(GRID_SIZE):
-          if board_state[i][j] == '~':
-            self.moves_available.append((i,j))
-    else:
-      #stores the moves available into this node's moves available
-      self.moves_available = parent_moves_available
-    self.payoff = None
-    self.score = None
-    self.visits = 0
-    self.move = parent_move
-    self.parent = parent_node
-    self.children = []
+class mcts:
+    def __init__(self, env, samples):
+        self.env = env
+        self.move_sim = samples
+        self.priority = 5
+        self.max_attempts = 100  # Maximum number of attempts to place a ship
+
+    def monte_carlo(self, fog_of_war):
+        simulations = []
+        for _ in range(self.move_sim):
+            simulated_board, intersect = self.simulate_ship(fog_of_war)
+            if intersect:
+                for _ in range(self.priority):
+                    simulations.append(simulated_board)
+            simulations.append(simulated_board)
+        simulations = np.array(simulations)
+        percentages = np.mean(simulations, axis=0)
+        return percentages
+
+    def simulate_ship(self, fog_of_war):
+        simulated_board = np.zeros((GRID_SIZE, GRID_SIZE))
+        intersect = 0
+        for ship_name, ship_size in SHIPS_SIZES.items():
+            placed = False
+            attempts = 0
+            while not placed and attempts < self.max_attempts:
+                attempts += 1
+                orientation = random.choice(['H', 'V'])
+                if orientation == 'H':
+                    row = random.randint(0, GRID_SIZE - 1)
+                    col = random.randint(0, GRID_SIZE - ship_size)
+                    if all(fog_of_war[row][c] == '~' for c in range(col, col + ship_size)):
+                        for c in range(col, col + ship_size):
+                            simulated_board[row][c] = 1
+                            if fog_of_war[row][c] == 'X':
+                                intersect += 1
+                        placed = True
+                else:
+                    row = random.randint(0, GRID_SIZE - ship_size)
+                    col = random.randint(0, GRID_SIZE - 1)
+                    if all(fog_of_war[r][col] == '~' for r in range(row, row + ship_size)):
+                        for r in range(row, row + ship_size):
+                            simulated_board[r][col] = 1
+                            if fog_of_war[r][col] == 'X':
+                                intersect += 1
+                        placed = True
+        return simulated_board, intersect
+
+    def ai_mcts_move(self):
+        fog_of_war = self.env.fog_of_war
+        print("Fog of War:", fog_of_war)
+        percentages = self.monte_carlo(fog_of_war)
+        print("Probabilities:", percentages)
+        max_prob = -1
+        move = (0, 0)
+
+        if self.env.target_mode and self.env.hit_stack:
+            move = self.env.hit_stack.pop()
+            print("Target mode. Move from hit stack:", move)
+        else:
+            for row in range(GRID_SIZE):
+                for col in range(GRID_SIZE):
+                    if self.env.state[row][col] not in ('X', 'O') and percentages[row][col] > max_prob:
+                        max_prob = percentages[row][col]
+                        move = (row, col)
+            print("Selected move based on probabilities:", move)
+
+        row, col = move
+        if self.env.state[row][col] == '#':
+            self.env.fog_of_war[row][col] = 'X'
+            self.env.state[row][col] = 'X'
+            self.env.target_mode = True
+            self.env.update_probabilities_after_hit(row, col)
+            self.update_hit_stack(row, col)
+            print("Hit at:", move)
+            sunk_ship = self.env.check_ship_sunk()
+            if sunk_ship:
+                self.env.hit_stack = []
+                self.env.target_mode = False
+                print(f"The enemy has sunk your {sunk_ship}!")
+            return True
+        else:
+            self.env.fog_of_war[row][col] = 'O'
+            self.env.state[row][col] = 'O'
+            print("Miss at:", move)
+            self.handle_miss(row, col)
+            return False
+
+    def update_hit_stack(self, row, col):
+        directions = [(-1, 0), (0, -1), (1, 0), (0, 1)]
+        for dr, dc in directions:
+            nr, nc = row + dr, col + dc
+            if self.env.is_in_bounds(nr, nc) and self.env.state[nr][nc] not in ('X', 'O'):
+                self.env.hit_stack.append((nr, nc))
+        print("Updated hit stack:", self.env.hit_stack)
+
+    def handle_miss(self, row, col):
+        hit_sequences = self.get_hit_sequences()
+        for seq in hit_sequences:
+            if len(seq) >= 3:
+                r1, c1 = seq[0]
+                r2, c2 = seq[-1]
+                if (r1 == r2 and col in range(min(c1, c2), max(c1, c2) + 1)) or (c1 == c2 and row in range(min(r1, r2), max(r1, r2) + 1)):
+                    if r1 == r2:  # Horizontal sequence
+                        if c1 > 0 and self.env.state[r1][c1 - 1] not in ('X', 'O'):
+                            self.env.hit_stack.append((r1, c1 - 1))
+                        if c2 < GRID_SIZE - 1 and self.env.state[r1][c2 + 1] not in ('X', 'O'):
+                            self.env.hit_stack.append((r1, c2 + 1))
+                    elif c1 == c2:  # Vertical sequence
+                        if r1 > 0 and self.env.state[r1 - 1][c1] not in ('X', 'O'):
+                            self.env.hit_stack.append((r1 - 1, c1))
+                        if r2 < GRID_SIZE - 1 and self.env.state[r2 + 1][c1] not in ('X', 'O'):
+                            self.env.hit_stack.append((r2 + 1, c1))
+        print("Updated hit stack after miss:", self.env.hit_stack)
+
+    def get_hit_sequences(self):
+        hits = [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE) if self.env.state[r][c] == 'X']
+        sequences = []
+        for hit in hits:
+            r, c = hit
+            # Check horizontal sequence
+            horiz_seq = [(r, c)]
+            for dc in range(1, GRID_SIZE - c):
+                if self.env.state[r][c + dc] == 'X':
+                    horiz_seq.append((r, c + dc))
+                else:
+                    break
+            if len(horiz_seq) > 1:
+                sequences.append(horiz_seq)
+            # Check vertical sequence
+            vert_seq = [(r, c)]
+            for dr in range(1, GRID_SIZE - r):
+                if self.env.state[r + dr][c] == 'X':
+                    vert_seq.append((r + dr, c))
+                else:
+                    break
+            if len(vert_seq) > 1:
+                sequences.append(vert_seq)
+        return sequences
+
 
 # Holds all information about a player's board
 class BoardState:
@@ -81,7 +203,7 @@ class BoardState:
   # ships_dict will have a ship name key to access the grid locations of the key ship
   #  this is to know the name of the ship that is destroyed so that the name can be
   # ships_remaining will contain the names of ships that have yet to be sunk
-  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None):
+  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None, samples=100):
     self.state = state if state is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = fog_of_war if fog_of_war is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = ships if ships is not None else []
@@ -90,6 +212,10 @@ class BoardState:
     self.hit_stack = []
     self.target_mode = False
     self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.random_mode = True
+    self.samples = samples
+    self.mcts = mcts(self, samples)
+
 
   """SHIP PLACEMENT HELPERS"""
   
@@ -208,51 +334,6 @@ class BoardState:
       self.ships_dict.update({ship: ship_coordinates})
       # Ship successfully placed onto board
       break
-      
-    def AI_tree_move(self) -> bool:
-        if self.target_mode and self.hit_stack:
-            move = self.hit_stack.pop()
-        else:
-            self.target_mode = False
-            while True:
-                move = (random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1))
-                if self.state[move[0]][move[1]] not in ('X', 'O'):
-                    break
-
-        row, col = move
-
-        if self.state[row][col] == '#':
-            self.fog_of_war[row][col] = 'X'
-            self.state[row][col] = 'X'
-            self.target_mode = True
-
-            if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
-                self.hit_stack.append((row - 1, col))
-            if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
-                self.hit_stack.append((row + 1, col))
-            if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
-                self.hit_stack.append((row, col - 1))
-            if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
-                self.hit_stack.append((row, col + 1))
-
-            return True
-        else:
-            self.fog_of_war[row][col] = 'O'
-            self.state[row][col] = 'O'
-            return False
-
-    def update_probabilities_after_hit(self, row: int, col: int) -> None:
-        if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
-            self.probability_grid[row - 1][col] += 10
-        if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
-            self.probability_grid[row + 1][col] += 10
-        if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
-            self.probability_grid[row][col - 1] += 10
-        if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
-            self.probability_grid[row][col + 1] += 10
-
-    def is_in_bounds(self, row: int, col: int) -> bool:
-        return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
 
   """MISC FUNCTIONS"""
   # Write the ship's characters onto the board
@@ -567,7 +648,7 @@ class BoardState:
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     raise NotImplementedError("This function will choose a move based on Monte Carlo Tree Search")
-  # Generates all possible positions of all remaining ships and hits position with highest probability of existence
+  # Generates all possible positions of all remaining ships and hits position with highest of existence
   # This implementation is only optimal in conjunction with the hunt strategy (if not currently hunting a ship, use this)
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_probability_move(self) -> tuple[int, int]:
@@ -605,14 +686,68 @@ class BoardState:
               max_row = row
               max_col = col
     return (max_row, max_col)
-            
+
+    # Chooses a move based on Monte Carlo Tree Search
+    #  returns a boolean, True for ship hit or False for ship not hit
+
+  def AI_tree_move(self) -> bool:
+      if self.target_mode and self.hit_stack:
+          move = self.hit_stack.pop()
+      else:
+          self.target_mode = False
+          while True:
+              move = (random.randint(0, GRID_SIZE - 1), random.randint(0, GRID_SIZE - 1))
+              if self.state[move[0]][move[1]] not in ('X', 'O'):
+                  break
+
+      row, col = move
+
+      if self.state[row][col] == '#':
+          self.fog_of_war[row][col] = 'X'
+          self.state[row][col] = 'X'
+          self.target_mode = True
+
+          if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+              self.hit_stack.append((row - 1, col))
+          if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+              self.hit_stack.append((row + 1, col))
+          if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+              self.hit_stack.append((row, col - 1))
+          if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+              self.hit_stack.append((row, col + 1))
+
+          return True
+      else:
+          self.fog_of_war[row][col] = 'O'
+          self.state[row][col] = 'O'
+          return False
+
+  def AI_mcts_move(self) -> bool:
+    return self.mcts.ai_mcts_move()
+
+
+  def update_probabilities_after_hit(self, row: int, col: int) -> None:
+    if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+        self.probability_grid[row - 1][col] += 10
+    if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+        self.probability_grid[row + 1][col] += 10
+    if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+        self.probability_grid[row][col - 1] += 10
+    if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+        self.probability_grid[row][col + 1] += 10
+
+  def is_in_bounds(self, row: int, col: int) -> bool:
+    return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
+
+
+
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
-    def gen_AI_move(self, style_choice: int) -> bool:
-        if style_choice == 1: return self.random_move()
-        if style_choice == 2: return self.human_sim_move()
-        if style_choice == 3: return self.AI_mcts_move()
-        if style_choice == 4: return self.AI_tree_move()
+  def gen_AI_move(self, style_choice: int) -> bool:
+    if style_choice == 1: return self.random_move()
+    if style_choice == 2: return self.human_sim_move()
+    if style_choice == 3: return self.AI_mcts_move()
+    if style_choice == 4: return self.AI_tree_move()
 
 # Player chooses if they want to play a game or test the AI
 def choose_play_or_test() -> int:
