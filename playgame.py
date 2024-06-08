@@ -197,7 +197,54 @@ class NeuralNetwork:
   def sim_hunt(self, board):
     return 0
   
-  def sim_search(self, board):
+  def nn_allowed_swing_points(self, anchor_row: int, anchor_col: int, ship_size: int) -> list[str]:
+    possible_positions = []
+    swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
+
+    # The offset of 1 accounts for only needing to be ship_size-1 spots away from the anchor
+    right_swing_point = anchor_col+(SHIPS_SIZES[ship]-1)
+    down_swing_point = anchor_row+(SHIPS_SIZES[ship]-1)
+    left_swing_point = anchor_col-(SHIPS_SIZES[ship]-1)
+    up_swing_point = anchor_row-(SHIPS_SIZES[ship]-1)
+    
+    if (down_swing_point <= 9): swing_down_allowed = all(self.state[n][anchor_col] == '0' for n in range(anchor_row+1, down_swing_point+1))
+    if (right_swing_point <= 9): swing_right_allowed = all(self.state[anchor_row][n] == '0' for n in range(anchor_col+1, right_swing_point+1))
+    if (up_swing_point >= 0): swing_up_allowed = all(self.state[n][anchor_col] == '0' for n in range(up_swing_point, anchor_row))
+    if (left_swing_point >= 0): swing_left_allowed = all(self.state[anchor_row][n] == '0' for n in range(left_swing_point, anchor_col))
+
+    # Append swing locations depending on if they are allowed
+    if (swing_down_allowed): possible_positions.append(INT_TO_STR[down_swing_point] + str(anchor_col))
+    if (swing_right_allowed): possible_positions.append(INT_TO_STR[anchor_row] + str(right_swing_point))
+    if (swing_up_allowed): possible_positions.append(INT_TO_STR[up_swing_point] + str(anchor_col))
+    if (swing_left_allowed): possible_positions.append(INT_TO_STR[anchor_row] + str(left_swing_point))
+    return possible_positions
+  
+  def sim_search(self, ships_remaining):
+    for i in range(GRID_SIZE):
+      for j in range(GRID_SIZE):
+        if self.board[i][j] in ('X', 'O'):
+          self.board[i][j] = 1
+        else:
+          self.board[i][j] = 0
+    for ship in ships_remaining:
+      while True:
+        while True:
+          random_row = random.randint(0, GRID_SIZE - 1)
+          random_col = random.randint(0, GRID_SIZE - 1)
+          if self.state[random_row][random_col] != '1':
+            # Found a coordinate not on top of a ship
+            anchor_row, anchor_col = random_row, random_col
+            break
+        valid_swing_points = self.nn_allowed_swing_points(anchor_row, anchor_col, SHIPS_SIZES[ship])
+        if len(valid_swing_points) == 0: continue
+        self.state[anchor_row][anchor_col] = PIECE_CHAR
+        swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
+        swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
+        ship_coordinates = self.write_ship_to_board(anchor_row, anchor_col, swing_row, swing_col)
+        self.ships.append(ship_coordinates)
+        self.ships_dict.update({ship: ship_coordinates})
+        break
+          
     return 0
   
 # Holds all information about a player's board
