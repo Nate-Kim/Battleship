@@ -189,6 +189,17 @@ class mcts:
         sequences.append(vert_seq)
     return sequences
 
+# NN Implementation
+class NeuralNetwork:
+  def __init__(self, board):
+    self.board = board
+  
+  def sim_hunt(self, board):
+    return 0
+  
+  def sim_search(self, board):
+    return 0
+  
 # Holds all information about a player's board
 class BoardState:
   # state represents a player's view of their own board
