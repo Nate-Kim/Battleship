@@ -938,27 +938,27 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   AI_grid.print_grid(fog_of_war=True)
 
 def main():
-  board = BoardState()
-  board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
-                      ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
-                      ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
-                      ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
-                      ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
-                      ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
-                      ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
-                      ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
-                      ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
-                      ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
-  board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
-  board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
-  data = board.sim_hunt(nreps=10)
-  data.sort(key=lambda x: x[1], reverse=True)
-  for i in data:
-    print(i[1])
-    for row in i[0]:
-      print(row)
+  # board = BoardState()
+  # board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
+  #                     ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
+  #                     ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
+  #                     ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
+  #                     ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
+  # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
+  # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
+  # data = board.sim_hunt(nreps=10)
+  # data.sort(key=lambda x: x[1], reverse=True)
+  # for i in data:
+  #   print(i[1])
+  #   for row in i[0]:
+  #     print(row)
 
-  return 0
+  # return 0
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
