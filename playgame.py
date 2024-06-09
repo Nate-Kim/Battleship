@@ -1,6 +1,7 @@
 import random
 import os
 import numpy as np
+import copy
 
 GRID_SIZE = 10
 SHIPS_SIZES = {"aircraft carrier": 5, 
@@ -189,17 +190,6 @@ class mcts:
         sequences.append(vert_seq)
     return sequences
 
-# NN Implementation
-class NeuralNetwork:
-  def __init__(self, board):
-    self.board = board
-  
-  def sim_hunt(self, board):
-    return 0
-  
-  def sim_search(self, board):
-    return 0
-  
 # Holds all information about a player's board
 class BoardState:
   # state represents a player's view of their own board
@@ -209,16 +199,16 @@ class BoardState:
   # ships_dict will have a ship name key to access the grid locations of the key ship
   #  this is to know the name of the ship that is destroyed so that the name can be
   # ships_remaining will contain the names of ships that have yet to be sunk
-  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None, samples=100):
+  # locations_destroyed is an array of ship location arrays that hold grid location arrays as ints
+  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None, locations_destroyed=None, samples=100):
     self.state = state if state is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = fog_of_war if fog_of_war is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = ships if ships is not None else []
     self.ships_dict = {} if ships_dict is None else {k: v[:] for k, v in ships_dict.items()}
     self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
-    self.hit_stack = []
-    self.target_mode = False
+    self.locations_destroyed = [] if locations_destroyed is None else list(locations_destroyed)
     self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
-    self.random_mode = True
+
     self.samples = samples
     self.mcts = mcts(self, samples)
 
@@ -363,6 +353,7 @@ class BoardState:
     for ship_name, ship_locations in self.ships_dict.items():
       # If the ship has been sunk
       if all(self.state[row][col] == 'X' for row, col in ship_locations):
+        self.locations_destroyed.append(ship_locations)
         del self.ships_dict[ship_name]
         self.ships_remaining.remove(ship_name)
         return ship_name
@@ -597,9 +588,7 @@ class BoardState:
               return False
         
           self.next_tile()
-  # Chooses a move based on AI tree search
-  #  returns a boolean, True for ship hit or False for ship not hit
-  def AI_tree_move(self) -> bool:
+
       if self.target_mode and self.hit_stack:
           move = self.hit_stack.pop()
       else:
@@ -634,6 +623,21 @@ class BoardState:
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     return self.mcts.ai_mcts_move()
+  def neural_network_move(self) -> bool:
+    """
+    IDs:
+      0: unexplored
+      1: hit and destroyed OR miss
+      2: hit but not destroyed
+      3: ship simulated
+      4: ship simulated on top of undestroyed ship
+    Rules:
+      - Input board with 0's, 1's, 2's
+      - Can make a move on 0
+      - Ideally should target locations near existing 2's
+      - The generated data 
+    """
+    return False
 
   """MOVE HELPERS"""
   # Generates all possible positions of all remaining ships and hits position with highest of existence
@@ -726,19 +730,147 @@ class BoardState:
       return self.set_up_target_mode(marker[0], marker[1])
     else:
       return 0
-  # AI tree move helpers
-  def update_probabilities_after_hit(self, row: int, col: int) -> None:
-    if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
-        self.probability_grid[row - 1][col] += 10
-    if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
-        self.probability_grid[row + 1][col] += 10
-    if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
-        self.probability_grid[row][col - 1] += 10
-    if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
-        self.probability_grid[row][col + 1] += 10
-  def is_in_bounds(self, row: int, col: int) -> bool:
-    return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
+  # NN helpers
+  def sim_search(self, nreps):
+    data = []
+    for _ in range(nreps):
+      test_grid = copy.deepcopy(self.fog_of_war)
+      for ship in self.ships_remaining:
+        # Until the ship is properly placed
+        while True:
+          # Get a coordinate value not already used
+          while True:
+            random_row = random.randint(0, GRID_SIZE - 1)
+            random_col = random.randint(0, GRID_SIZE - 1)
+            if test_grid[random_row][random_col] not in ('X', 'O'):
+              anchor_row, anchor_col = random_row, random_col
+              break
+          # Get allowed swing points
+          valid_swing_points = []
+          swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
 
+          right_swing_point = anchor_col+(SHIPS_SIZES[ship]-1)
+          down_swing_point = anchor_row+(SHIPS_SIZES[ship]-1)
+          left_swing_point = anchor_col-(SHIPS_SIZES[ship]-1)
+          up_swing_point = anchor_row-(SHIPS_SIZES[ship]-1)
+
+          if (down_swing_point <= 9): swing_down_allowed = all(test_grid[n][anchor_col] == '~' for n in range(anchor_row+1, down_swing_point+1))
+          if (right_swing_point <= 9): swing_right_allowed = all(test_grid[anchor_row][n] == '~' for n in range(anchor_col+1, right_swing_point+1))
+          if (up_swing_point >= 0): swing_up_allowed = all(test_grid[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
+          if (left_swing_point >= 0): swing_left_allowed = all(test_grid[anchor_row][n] == '~' for n in range(left_swing_point, anchor_col))
+
+          if (swing_down_allowed): valid_swing_points.append(INT_TO_STR[down_swing_point] + str(anchor_col))
+          if (swing_right_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(right_swing_point))
+          if (swing_up_allowed): valid_swing_points.append(INT_TO_STR[up_swing_point] + str(anchor_col))
+          if (swing_left_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(left_swing_point))
+
+          # If there are no possible swing points from the chosen anchor, then reset anchor
+          if len(valid_swing_points) == 0: continue
+          # Place the anchor point on the board
+          test_grid[anchor_row][anchor_col] = PIECE_CHAR
+          # Set secondary point (orientations that are in bounds and do not overlap other ships)
+          swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
+          swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
+          # Place ship onto board
+          a_x, a_y = anchor_row, anchor_col
+          s_x, s_y = swing_row, swing_col
+          # Horizontal orientation
+          if a_y == s_y: 
+            for x in range(min(a_x, s_x), max(a_x, s_x)+1): test_grid[x][a_y] = PIECE_CHAR
+          # Vertical orientation
+          if a_x == s_x:
+            for y in range(min(a_y, s_y), max(a_y, s_y)+1): test_grid[a_x][y] = PIECE_CHAR
+
+          break
+      data.append(test_grid)
+    return data
+  def sim_hunt(self, nreps):
+    data = []
+    current_state = copy.deepcopy(self.fog_of_war)
+    # Modify fog of war input
+    # 0: unexplored
+    # 1: hit and destroyed OR miss
+    # 2: hit but not destroyed
+    # 3: ship simulated
+    # 4: ship simulated on top of undestroyed ship
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+        if current_state[row][col] == 'X' and any([row, col] in _ for _ in self.locations_destroyed):
+          current_state[row][col] = 1
+        elif current_state[row][col] == 'O':
+          current_state[row][col] = 1
+        elif current_state[row][col] == 'X' and not any([row, col] in _ for _ in self.locations_destroyed):
+          current_state[row][col] = 2
+        else:
+          current_state[row][col] = 0
+    for _ in range(nreps):
+      test_grid = copy.deepcopy(current_state)
+      current_overlaps = 0
+      # Simulate ship placements on board
+      for ship in self.ships_remaining:
+        # Until the ship is properly placed
+        while True:
+          # Get a coordinate value not already used
+          while True:
+            random_row = random.randint(0, GRID_SIZE - 1)
+            random_col = random.randint(0, GRID_SIZE - 1)
+            if test_grid[random_row][random_col] in (0, 2):
+              anchor_row, anchor_col = random_row, random_col
+              break
+          # Get allowed swing points
+          valid_swing_points = []
+          swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
+
+          right_swing_point = anchor_col+(SHIPS_SIZES[ship]-1)
+          down_swing_point = anchor_row+(SHIPS_SIZES[ship]-1)
+          left_swing_point = anchor_col-(SHIPS_SIZES[ship]-1)
+          up_swing_point = anchor_row-(SHIPS_SIZES[ship]-1)
+
+          if (down_swing_point <= 9): swing_down_allowed = all(test_grid[n][anchor_col] in (0, 2) for n in range(anchor_row+1, down_swing_point+1))
+          if (right_swing_point <= 9): swing_right_allowed = all(test_grid[anchor_row][n] in (0, 2) for n in range(anchor_col+1, right_swing_point+1))
+          if (up_swing_point >= 0): swing_up_allowed = all(test_grid[n][anchor_col] in (0, 2) for n in range(up_swing_point, anchor_row))
+          if (left_swing_point >= 0): swing_left_allowed = all(test_grid[anchor_row][n] in (0, 2) for n in range(left_swing_point, anchor_col))
+
+          if (swing_down_allowed): valid_swing_points.append(INT_TO_STR[down_swing_point] + str(anchor_col))
+          if (swing_right_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(right_swing_point))
+          if (swing_up_allowed): valid_swing_points.append(INT_TO_STR[up_swing_point] + str(anchor_col))
+          if (swing_left_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(left_swing_point))
+
+          # If there are no possible swing points from the chosen anchor, then reset anchor
+          if len(valid_swing_points) == 0: continue
+          # Place the anchor point on the board
+          if test_grid[anchor_row][anchor_col] == 0: 
+            test_grid[anchor_row][anchor_col] = 3
+          elif test_grid[anchor_row][anchor_col] == 2: 
+            test_grid[anchor_row][anchor_col] = 4
+            current_overlaps += 1
+          # Set secondary point (orientations that are in bounds and do not overlap other ships)
+          swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
+          swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
+          # Place ship onto board
+          a_x, a_y = anchor_row, anchor_col
+          s_x, s_y = swing_row, swing_col
+          # Horizontal orientation
+          if a_y == s_y: 
+            for x in range(min(a_x, s_x), max(a_x, s_x)+1): 
+              if test_grid[x][a_y] == 0: 
+                test_grid[x][a_y] = 3
+              elif test_grid[x][a_y] == 2: 
+                test_grid[x][a_y] = 4
+                current_overlaps += 1
+          # Vertical orientation
+          if a_x == s_x:
+            for y in range(min(a_y, s_y), max(a_y, s_y)+1): 
+              if test_grid[a_x][y] == 0: 
+                test_grid[a_x][y] = 3
+              elif test_grid[a_x][y] == 0: 
+                test_grid[a_x][y] = 4
+                current_overlaps += 1
+
+          break
+      data.append((test_grid, current_overlaps))
+    return data
+    
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
   def gen_AI_move(self, style_choice: int) -> bool:
@@ -806,6 +938,27 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   AI_grid.print_grid(fog_of_war=True)
 
 def main():
+  board = BoardState()
+  board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
+                      ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
+                      ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
+                      ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
+                      ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
+                      ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
+                      ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
+                      ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
+                      ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
+                      ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
+  board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
+  board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
+  data = board.sim_hunt(nreps=10)
+  data.sort(key=lambda x: x[1], reverse=True)
+  for i in data:
+    print(i[1])
+    for row in i[0]:
+      print(row)
+
+  return 0
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
@@ -855,7 +1008,7 @@ def main():
       if len(AI_grid.ships_remaining) == 0: 
         print_end_message(player_grid, AI_grid, False, count_player)
         break
-      
+
       # Make AI move according to player choice
       player_check_ship_hit = player_grid.gen_AI_move(style_choice)
       AI_move_result = "The enemy has hit one of your ships!" if player_check_ship_hit else "The enemy missed."
