@@ -447,15 +447,28 @@ class BoardState:
     if (humanSimSunkResult != ""):
       destroyMode = False
       targetStack.pop() #popping to ge rid of the choice the destroy mode added last call of human_sim_move
-      latestDirection = hitMarkers[len(hitMarkers) -1][2]
+      #latestDirection = hitMarkers[len(hitMarkers) -1][2]
+      shipSunkList = self.locations_destroyed[len(self.locations_destroyed) - 1]
       #since a ship was destroyed, remove all hit markers releated to that destroyed ship
-      i = len(hitMarkers) -1
-      while(i >= 0):
-        if(hitMarkers[i][2] == latestDirection):
-          hitMarkers.pop()
+      print(shipSunkList)
+      print(hitMarkers)
+      listTemp = []
+      for x in hitMarkers:
+        if(not([x[0], x[1]] in shipSunkList)):
+          print("keeping [" + str(x[0]) + ", " + str(x[1]) + "]")
+          #hitMarkers.remove(x)
+          listTemp.append(x)
         else:
-          break
-        i -= 1
+          print("removing [" + str(x[0]) + ", " + str(x[1]) + "]")
+      hitMarkers = listTemp
+      print(hitMarkers)
+      #i = len(hitMarkers) -1
+      #while(i >= 0):
+        #if(hitMarkers[i][2] == latestDirection):
+          #hitMarkers.pop()
+        #else:
+          #break
+        #i -= 1
       #hitMarkers.pop() #removing the hitmarker that acts as the pivot point between the two cardinal directions
       if(len(hitMarkers) == 0): # only clear when there are no more hitmarkers to investigate
         targetStack[:] = [] #clear list
@@ -525,28 +538,36 @@ class BoardState:
                 #algorithm was certain it can destroy a ship in this particular cardinal direction. So this must mean the algorithm has hit multiple ships lined up together 
                 # remove latest append since we have discovered the current move is a miss 
                 targetStack.pop() 
-                destroyMode = False
-                clearHitMarkers = True
-                removeFromStackCount = self.check_hit_markers()
+              destroyMode = False
+              clearHitMarkers = True
+              removeFromStackCount = self.check_hit_markers()
               return False
     elif(clearHitMarkers):
       #behave similar to target mode: pop decisions until a hit is found. Then destroy that ship with destroy mode
       move = targetStack.pop()
-      if(removeFromStackCount != 0):
-        removeFromStackCount -= 1
+      #if(removeFromStackCount != 0):
+        #removeFromStackCount -= 1
       if(self.state[move[0]][move[1]] == '#'):
         self.fog_of_war[move[0]][move[1]] = 'X'
         self.state[move[0]][move[1]] = 'X'
         hitMarkers.append(move)
-        for i in range(removeFromStackCount):
-          targetStack.pop()
+        #for i in range(removeFromStackCount):
+          #targetStack.pop()
         if(move[2] == "up"):
+          #if(self.fog_of_war[move[0] + 1][move[1]] == '~' and move[0] + 1 <=9):
+            #targetStack.append((move[0] + 1, move[1], "down"))
           targetStack.append((move[0] - 1, move[1], "up"))
         elif(move[2] == "down"):
+          #if(self.fog_of_war[move[0] - 1][move[1]] == '~' and move[0] - 1 >= 0):
+            #targetStack.append((move[0] - 1, move[1], "up"))
           targetStack.append((move[0] + 1, move[1], "down"))
         elif(move[2] == "left"):
+          #if(self.fog_of_war[move[0]][move[1] + 1] == '~' and move[1] + 1 <= 9):
+            #targetStack.append((move[0], move[1] + 1, "right"))
           targetStack.append((move[0], move[1] - 1, "left"))
         else: #right
+          #if(self.fog_of_war[move[0]][move[1] - 1] == '~' and move[1] - 1 >= 0):
+            #targetStack.append((move[0], move[1] - 1, "left"))
           targetStack.append((move[0], move[1] + 1, "right"))
         clearHitMarkers = False
         destroyMode = True
@@ -564,6 +585,7 @@ class BoardState:
         if self.state[decision[0]][decision[1]] == '#':
           self.fog_of_war[decision[0]][decision[1]] = 'X'
           self.state[decision[0]][decision[1]] = 'X'
+          hitMarkers.append((decision[0], decision[1], "start"))
           targetMode = True
           self.set_up_target_mode(decision[0], decision[1])
           return True
@@ -915,7 +937,7 @@ def choose_AI_type(choice: int) -> int:
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
-  clear_console()
+  #clear_console()
   print(player_move_result)
   print(AI_move_result)
   # Show both grids to player with proper fog of war
