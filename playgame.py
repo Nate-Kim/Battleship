@@ -3,8 +3,8 @@ import os
 import copy
 
 import numpy as np
-# from tensorflow.keras.models import Sequential # type: ignore
-# from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape, BatchNormalization # type: ignore
+from tensorflow.keras.models import Sequential # type: ignore
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape # type: ignore
 import matplotlib.pyplot as plt
 import pickle
 
@@ -24,7 +24,7 @@ EPOCHS = 10 # Number of epochs for neural network
 
 NN_NREPS = 300 # Number of new samples for training and validation
 H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap)
-GENERATE_DATA = True  # Generate more samples for training and validation
+GENERATE_DATA = False  # Generate more samples for training and validation
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -1027,7 +1027,6 @@ class BoardState:
     # Define the model
     network = Sequential([
       Conv2D(25, (5, 5), activation='relu', input_shape=(10, 10, 3)),
-      BatchNormalization(),
       Flatten(),
       Dense(100, activation='softmax'),
       Reshape((10, 10, 1))
