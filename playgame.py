@@ -3,8 +3,8 @@ import os
 import copy
 
 import numpy as np
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
+# from tensorflow.keras.models import Sequential
+# from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
 import matplotlib.pyplot as plt
 import pickle
 
@@ -1078,16 +1078,16 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   AI_grid.print_grid(fog_of_war=True)
 
 def main():
-  # [(board, map), (board, map), ...]
-  with open('NNdata', 'rb') as file:
-    pairs = pickle.load(file)
-  for _ in range(NN_NREPS):
-    pairs.append(generate_random_boards_with_heatmaps())
-  with open('NNdata', 'wb') as file:
-      pickle.dump(pairs, file)
+  # # [(board, map), (board, map), ...]
+  # with open('NNdata', 'rb') as file:
+  #   pairs = pickle.load(file)
+  # for _ in range(NN_NREPS):
+  #   pairs.append(generate_random_boards_with_heatmaps())
+  # with open('NNdata', 'wb') as file:
+  #     pickle.dump(pairs, file)
 
-  print(len(pairs))
-  return 0
+  # print(len(pairs))
+  # return 0
   board = BoardState()
   board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
                       ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
