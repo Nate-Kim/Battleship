@@ -1,7 +1,12 @@
 import random
 import os
-import numpy as np
 import copy
+
+import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
+import matplotlib.pyplot as plt
+import pickle
 
 GRID_SIZE = 10
 SHIPS_SIZES = {"aircraft carrier": 5, 
@@ -13,7 +18,13 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 10
+NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
+
+EPOCHS = 10 # Number of epochs for neural network
+
+NN_NREPS = 100 # Number of new samples for training and validation
+H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap)
+GENERATE_DATA = False  # Generate more samples for training and validation
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -201,14 +212,16 @@ class BoardState:
   #  this is to know the name of the ship that is destroyed so that the name can be
   # ships_remaining will contain the names of ships that have yet to be sunk
   # locations_destroyed is an array of ship location arrays that hold grid location arrays as ints
-  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, ships_remaining=None, locations_destroyed=None, samples=100):
+  # searching tells the NN whether to use heatmap or probability grid, set in transform_data
+  def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, 
+               ships_remaining=None, locations_destroyed=None, samples=100, searching=None):
     self.state = state if state is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = fog_of_war if fog_of_war is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = ships if ships is not None else []
     self.ships_dict = {} if ships_dict is None else {k: v[:] for k, v in ships_dict.items()}
     self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
     self.locations_destroyed = [] if locations_destroyed is None else list(locations_destroyed)
-    self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.searching = True if searching is None else searching
 
     self.samples = samples
     self.mcts = mcts(self, samples)
@@ -678,12 +691,14 @@ class BoardState:
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     return self.mcts.ai_mcts_move()
+  # Chooses a move based on neural network strategy
+  #  returns a boolean, True for ship hit or False for ship not hit
   def neural_network_move(self) -> bool:
     """
-    IDs:
-      0: unexplored
-      1: hit and destroyed OR miss
-      2: hit but not destroyed
+    IDs for input:
+      0: unexplored (0th layer for 3D one-hot representation)
+      1: hit and destroyed OR miss (1st layer for 3D one-hot representation)
+      2: hit but not destroyed (2nd layer for 3D one-hot representation)
       3: ship simulated
       4: ship simulated on top of undestroyed ship
     Rules:
@@ -692,14 +707,98 @@ class BoardState:
       - Ideally should target locations near existing 2's
       - The generated data 
     """
-    return False
+
+    # [(transformed state, heatmap), ...]
+    with open('NNdata', 'rb') as file:
+      pairs = pickle.load(file)
+
+    random_board_list = []
+    heatmap_list = []
+    for pair in pairs:
+      (random_board, heatmap) = pair
+      random_board_list.append(random_board)
+      heatmap_list.append(heatmap)
+    # Transform input data to a list of one-hot 3D representations
+    # layer 0 locations that can be chosen
+    # layer 1 is locations that cannot be chosen
+    # layer 2 is locations that cannot be hit but are encoded on a different layer (undestroyed ships)
+    input_tensor_list = []
+    for random_board in random_board_list:
+      input_tensor = np.zeros((10, 10, 3))
+      for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+          if random_board[row][col] == 0:
+            input_tensor[row][col][0] = 1
+          elif random_board[row][col] == 1:
+            input_tensor[row][col][1] = 1
+          elif random_board[row][col] == 2:
+            input_tensor[row][col][2] = 1
+      input_tensor_list.append(input_tensor)
+
+    test_data = self.fog_of_war
+    test_tensor = np.zeros((10, 10, 3))
+    # Transform test data the same way as input data
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+        if test_data[row][col] == 0:
+          test_tensor[row][col][0] = 1
+        elif test_data[row][col] == 1:
+          test_tensor[row][col][1] = 1
+        elif test_data[row][col] == 2:
+          test_tensor[row][col][2] = 1
+    if self.searching: test_value = self.get_probability_grid()
+    else: test_value = self.get_heatmap(nreps=H_NREPS, current_state=self.transform_data())    
+
+    # 80:20 split
+    training_data = np.array(input_tensor_list[:int(len(input_tensor_list) * 0.8)])
+    training_labels = np.array(heatmap_list[:int(len(heatmap_list) * 0.8)])
+    validation_data = np.array(input_tensor_list[int(len(input_tensor_list) * 0.8):])
+    validation_labels = np.array(heatmap_list[int(len(heatmap_list) * 0.8):])
+    # input state
+    test_data = np.expand_dims(test_tensor, axis=0)
+    test_label = np.expand_dims(test_value, axis=0)
+
+    # Define the model
+    network = Sequential([
+      Conv2D(25, (5, 5), padding='same', activation='relu', input_shape=(10, 10, 3)),
+      Flatten(),
+      Dense(100, activation='sigmoid'),
+      Reshape((10, 10))
+    ])
+    
+    # Compile the model
+    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    network.fit(training_data, training_labels, epochs=EPOCHS, batch_size=20, validation_data=(validation_data, validation_labels))
+    loss, accuracy = network.evaluate(test_data, test_label)
+    print(f"Loss: {loss}")
+    print(f"Root mean squared error: {accuracy}")
+
+    nn_probability_array = np.squeeze(network.predict(test_data))
+    nn_probability_array /= np.max(nn_probability_array) 
+    print(nn_probability_array)
+
+    max_index = np.argmax(nn_probability_array)
+    max_row, max_col = np.unravel_index(max_index, nn_probability_array.shape)
+    print(f"Max Location: ({max_row}, {max_col})")
+
+    if self.state[max_row][max_col] == '#':
+      print("HIT!")
+      return True
+    if self.state[max_row][max_col] in ('X', 'O'):
+      print("ERROR")
+      return False
+    if self.state[max_row][max_col] == '~':
+      print("miss")
+      return False
+    return 0
 
   """MOVE HELPERS"""
   # Generates all possible positions of all remaining ships and hits position with highest of existence
   #  returns a the grid location with highest probability of a ship being there
+  # only works when in search mode
   def get_max_probability(self) -> tuple[int, int]:
     # Probabilities of each position start as all 0
-    probability_array = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    probability_array = np.zeros((10, 10))
 
     # Loop through every remaining ship name
     for ship_name in self.ships_remaining:
@@ -722,19 +821,39 @@ class BoardState:
               for i in range(current_ship_size):
                 probability_array[row+i][col] = probability_array[row+i][col] + 1
     
-    # Get the max probability in the array
-    max_prob = -1
-    for row in range(GRID_SIZE):
-      for col in range(GRID_SIZE):
-          value = probability_array[row][col]
-          if value > max_prob:
-              max_prob = value
-              max_row = row
-              max_col = col
-    return (max_row, max_col)
+    max_index = np.argmax(probability_array)
+    max_row, max_col = np.unravel_index(max_index, probability_array.shape)
 
-    # Chooses a move based on Monte Carlo Tree Search
-    #  returns a boolean, True for ship hit or False for ship not hit
+    return (max_row, max_col)
+  def get_probability_grid(self):
+    # Probabilities of each position start as all 0
+    probability_array = np.zeros((10, 10))
+
+    # Loop through every remaining ship name
+    for ship_name in self.ships_remaining:
+      # Get the current ship size
+      current_ship_size = SHIPS_SIZES[ship_name]
+      # Record right swing position and down swing position from current grid point
+      # For each grid location in the grid
+      for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+          # If a right swing is possible check the right swing orientation placement feasibility
+          if col <= GRID_SIZE-current_ship_size:
+            # If all of the grid locations in the current possible position are unchecked, add to probability grid
+            if all(self.fog_of_war[row][col+n] == '~' for n in range(current_ship_size)):
+              for i in range(current_ship_size):
+                probability_array[row][col+i] = probability_array[row][col+i] + 1
+          # If a down swing is possible check the down swing orientation placement feasibility
+          if row <= GRID_SIZE-current_ship_size:
+          # If all of the grid locations in the current possible position are unchecked, add to probability grid
+            if all(self.fog_of_war[row+n][col] == '~' for n in range(current_ship_size)):
+              for i in range(current_ship_size):
+                probability_array[row+i][col] = probability_array[row+i][col] + 1
+    
+    max_value = np.max(probability_array)
+    probability_array /= max_value
+
+    return probability_array
   # Human sim helpers
   def next_tile(self) -> None:
     global colNum
@@ -787,81 +906,19 @@ class BoardState:
     else:
       return 0
   # NN helpers
-  def sim_search(self, nreps):
-    data = []
-    for _ in range(nreps):
-      test_grid = copy.deepcopy(self.fog_of_war)
-      for ship in self.ships_remaining:
-        # Until the ship is properly placed
-        while True:
-          # Get a coordinate value not already used
-          while True:
-            random_row = random.randint(0, GRID_SIZE - 1)
-            random_col = random.randint(0, GRID_SIZE - 1)
-            if test_grid[random_row][random_col] not in ('X', 'O'):
-              anchor_row, anchor_col = random_row, random_col
-              break
-          # Get allowed swing points
-          valid_swing_points = []
-          swing_down_allowed = swing_right_allowed = swing_up_allowed = swing_left_allowed = False
-
-          right_swing_point = anchor_col+(SHIPS_SIZES[ship]-1)
-          down_swing_point = anchor_row+(SHIPS_SIZES[ship]-1)
-          left_swing_point = anchor_col-(SHIPS_SIZES[ship]-1)
-          up_swing_point = anchor_row-(SHIPS_SIZES[ship]-1)
-
-          if (down_swing_point <= 9): swing_down_allowed = all(test_grid[n][anchor_col] == '~' for n in range(anchor_row+1, down_swing_point+1))
-          if (right_swing_point <= 9): swing_right_allowed = all(test_grid[anchor_row][n] == '~' for n in range(anchor_col+1, right_swing_point+1))
-          if (up_swing_point >= 0): swing_up_allowed = all(test_grid[n][anchor_col] == '~' for n in range(up_swing_point, anchor_row))
-          if (left_swing_point >= 0): swing_left_allowed = all(test_grid[anchor_row][n] == '~' for n in range(left_swing_point, anchor_col))
-
-          if (swing_down_allowed): valid_swing_points.append(INT_TO_STR[down_swing_point] + str(anchor_col))
-          if (swing_right_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(right_swing_point))
-          if (swing_up_allowed): valid_swing_points.append(INT_TO_STR[up_swing_point] + str(anchor_col))
-          if (swing_left_allowed): valid_swing_points.append(INT_TO_STR[anchor_row] + str(left_swing_point))
-
-          # If there are no possible swing points from the chosen anchor, then reset anchor
-          if len(valid_swing_points) == 0: continue
-          # Place the anchor point on the board
-          test_grid[anchor_row][anchor_col] = PIECE_CHAR
-          # Set secondary point (orientations that are in bounds and do not overlap other ships)
-          swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
-          swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
-          # Place ship onto board
-          a_x, a_y = anchor_row, anchor_col
-          s_x, s_y = swing_row, swing_col
-          # Horizontal orientation
-          if a_y == s_y: 
-            for x in range(min(a_x, s_x), max(a_x, s_x)+1): test_grid[x][a_y] = PIECE_CHAR
-          # Vertical orientation
-          if a_x == s_x:
-            for y in range(min(a_y, s_y), max(a_y, s_y)+1): test_grid[a_x][y] = PIECE_CHAR
-
-          break
-      data.append(test_grid)
-    return data
-  def sim_hunt(self, nreps):
-    data = []
-    current_state = copy.deepcopy(self.fog_of_war)
-    # Modify fog of war input
-    # 0: unexplored
-    # 1: hit and destroyed OR miss
-    # 2: hit but not destroyed
-    # 3: ship simulated
-    # 4: ship simulated on top of undestroyed ship
-    for row in range(GRID_SIZE):
-      for col in range(GRID_SIZE):
-        if current_state[row][col] == 'X' and any([row, col] in _ for _ in self.locations_destroyed):
-          current_state[row][col] = 1
-        elif current_state[row][col] == 'O':
-          current_state[row][col] = 1
-        elif current_state[row][col] == 'X' and not any([row, col] in _ for _ in self.locations_destroyed):
-          current_state[row][col] = 2
-        else:
-          current_state[row][col] = 0
+  def get_heatmap(self, nreps, current_state):
+    """
+    0: unexplored
+    1: hit and destroyed OR miss
+    2: hit but not destroyed
+    3: ship simulated
+    4: ship simulated on top of undestroyed ship
+    """
+    # Append extra copies of a simulated board based on number of overlaps with undestroyed ships (more informative sims)
+    heatmap_list = []
     for _ in range(nreps):
       test_grid = copy.deepcopy(current_state)
-      current_overlaps = 0
+      num_overlaps = 0
       # Simulate ship placements on board
       for ship in self.ships_remaining:
         # Until the ship is properly placed
@@ -899,7 +956,7 @@ class BoardState:
             test_grid[anchor_row][anchor_col] = 3
           elif test_grid[anchor_row][anchor_col] == 2: 
             test_grid[anchor_row][anchor_col] = 4
-            current_overlaps += 1
+            num_overlaps += 1
           # Set secondary point (orientations that are in bounds and do not overlap other ships)
           swing_point = valid_swing_points[random.randint(0, len(valid_swing_points) - 1)]
           swing_row, swing_col = (STR_TO_INT[swing_point[0]], int(swing_point[1]))
@@ -913,7 +970,7 @@ class BoardState:
                 test_grid[x][a_y] = 3
               elif test_grid[x][a_y] == 2: 
                 test_grid[x][a_y] = 4
-                current_overlaps += 1
+                num_overlaps += 1
           # Vertical orientation
           if a_x == s_x:
             for y in range(min(a_y, s_y), max(a_y, s_y)+1): 
@@ -921,12 +978,44 @@ class BoardState:
                 test_grid[a_x][y] = 3
               elif test_grid[a_x][y] == 0: 
                 test_grid[a_x][y] = 4
-                current_overlaps += 1
+                num_overlaps += 1
 
           break
-      data.append((test_grid, current_overlaps))
-    return data
+      for _ in range(num_overlaps+1):
+        heatmap_list.append(test_grid)
     
+    heatmap_tensor = np.array(heatmap_list)
+
+    heatmap = np.zeros((10, 10))
+    for sim in heatmap_tensor:
+      for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+          if sim[row][col] == 3:
+            heatmap[row][col] += 1
+
+    return heatmap
+  def transform_data(self):
+    # Modify fog of war input
+    # 0: unexplored
+    # 1: hit and destroyed OR miss
+    # 2: hit but not destroyed
+    # 3: ship simulated
+    # 4: ship simulated on top of undestroyed ship
+    current_state = copy.deepcopy(self.fog_of_war)
+    self.searching = True
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+        if current_state[row][col] == 'X' and any([row, col] in _ for _ in self.locations_destroyed):
+          current_state[row][col] = 1
+        elif current_state[row][col] == 'O':
+          current_state[row][col] = 1
+        elif current_state[row][col] == 'X' and not any([row, col] in _ for _ in self.locations_destroyed):
+          current_state[row][col] = 2
+          self.searching = False
+        else:
+          current_state[row][col] = 0
+    return current_state
+  
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
   def gen_AI_move(self, style_choice: int) -> bool:
@@ -934,6 +1023,34 @@ class BoardState:
     if style_choice == 2: return self.human_sim_move()
     if style_choice == 3: return self.AI_mcts_move()
     if style_choice == 4: return self.AI_tree_move()
+
+# Generate a random board for the NN to train on
+#  return (transformed_board, heatmap)
+def generate_random_boards_with_heatmaps():
+  global probableHuman
+  hold_global = probableHuman
+  probableHuman = True
+  num_moves_random = random.randint(0, 80)#30)
+  #num_moves_probabilistic = random.randint(0, 30)
+
+  board = BoardState()
+  data = []
+  for _ in range(NN_NREPS):
+    for ship in SHIPS_NAMES:
+      board.randomly_place_ship(ship)
+    for _ in range(num_moves_random):
+      board.random_move()
+    # for _ in range(num_moves_probabilistic):
+    #   board.human_sim_move()
+    if len(board.ships_remaining) == 0: continue
+    transformed_layout = board.transform_data()
+    if board.searching: data.append((transformed_layout, board.get_probability_grid()))
+    else: data.append((transformed_layout, board.get_heatmap(nreps=H_NREPS, current_state=transformed_layout)))
+    board.reset()
+  
+  probableHuman = hold_global
+
+  return data
 
 # Player chooses if they want to play a game or test the AI
 def choose_play_or_test() -> int:
@@ -993,8 +1110,31 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
 
+def generate_data():
+  # [(board, map), (board, map), ...]
+  with open('NNdata', 'rb') as file:
+    pairs = pickle.load(file)
+  new_pairs = generate_random_boards_with_heatmaps()
+  for i in range(NN_NREPS):
+    pairs.append(new_pairs[i])
+  with open('NNdata', 'wb') as file:
+    pickle.dump(pairs, file)
+  print(len(pairs))
+
 def main():
+  # if GENERATE_DATA: generate_data()
+
   # board = BoardState()
+  # board.state =[['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
+  #               ['~', 'O', '#', 'O', 'O', '~', '~', '#', '~', '~'],
+  #               ['~', 'O', '#', '~', '~', '~', '~', '#', '~', '~'],
+  #               ['O', '~', 'X', 'X', '#', '~', '~', '#', '~', '~'],
+  #               ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
+  #               ['~', '~', '#', '~', '~', '~', '~', '~', 'O', '~'],
+  #               ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
+  #               ['#', '#', '#', '#', '~', '~', '~', '~', '~', '~'],
+  #               ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
+  #               ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
   # board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
   #                     ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
   #                     ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
@@ -1005,16 +1145,12 @@ def main():
   #                     ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
   #                     ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
   #                     ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
-  # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
   # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
-  # data = board.sim_hunt(nreps=10)
-  # data.sort(key=lambda x: x[1], reverse=True)
-  # for i in data:
-  #   print(i[1])
-  #   for row in i[0]:
-  #     print(row)
+  # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
 
+  # result = board.neural_network_move()
   # return 0
+  
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
