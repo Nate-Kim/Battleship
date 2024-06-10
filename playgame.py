@@ -3,8 +3,8 @@ import os
 import copy
 
 import numpy as np
-# from tensorflow.keras.models import Sequential
-# from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
 import matplotlib.pyplot as plt
 import pickle
 
@@ -18,10 +18,13 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 10 # Number of times an algorithm tests on a sample board if testing is selected
-NN_NREPS = 50 # Number of samples for training and validation
-H_NREPS = 1000 # Number of sims for get_heatmap
+NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
+
 EPOCHS = 10 # Number of epochs for neural network
+
+NN_NREPS = 100 # Number of new samples for training and validation
+H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap)
+GENERATE_DATA = False  # Generate more samples for training and validation
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -673,7 +676,9 @@ class BoardState:
     """
 
     # [(transformed state, heatmap), ...]
-    pairs = generate_random_boards_with_heatmaps()
+    with open('NNdata', 'rb') as file:
+      pairs = pickle.load(file)
+
     random_board_list = []
     heatmap_list = []
     for pair in pairs:
@@ -717,19 +722,8 @@ class BoardState:
     validation_data = np.array(input_tensor_list[int(len(input_tensor_list) * 0.8):])
     validation_labels = np.array(heatmap_list[int(len(heatmap_list) * 0.8):])
     # input state
-    test_data = np.array(test_tensor)
-    test_label = np.array(test_value)
-
-    # training_labels = np.expand_dims(training_labels, axis=-1)
-    # validation_labels = np.expand_dims(validation_labels, axis=-1)
-    # test_label = np.expand_dims(test_label, axis=-1)
-
-    print(f"Shape of training_data: {training_data.shape}")
-    print(f"Shape of training_labels: {training_labels.shape}")
-    print(f"Shape of validation_data: {validation_data.shape}")
-    print(f"Shape of validation_labels: {validation_labels.shape}")
-    print(f"Shape of test_data: {test_data.shape}")
-    print(f"Shape of test_label: {test_label.shape}")
+    test_data = np.expand_dims(test_tensor, axis=0)
+    test_label = np.expand_dims(test_value, axis=0)
 
     # Define the model
     network = Sequential([
@@ -740,24 +734,29 @@ class BoardState:
     ])
     
     # Compile the model
-    network.compile(optimizer='adam', loss='mean_squared_error', metrics=['mean_absolute_error', 'root_mean_squared_error'])
-    # Display the model's architecture
-    network.summary()
+    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    network.fit(training_data, training_labels, epochs=EPOCHS, batch_size=20, validation_data=(validation_data, validation_labels))
+    loss, accuracy = network.evaluate(test_data, test_label)
+    print(f"Loss: {loss}")
+    print(f"Root mean squared error: {accuracy}")
 
-    history = network.fit(training_data, training_labels, epochs=EPOCHS, validation_data=(validation_data, validation_labels))
+    nn_probability_array = np.squeeze(network.predict(test_data))
+    nn_probability_array /= np.max(nn_probability_array) 
+    print(nn_probability_array)
 
-    test_loss, test_acc = network.evaluate(test_data, test_label)
-    print('Test accuracy:', test_acc)
+    max_index = np.argmax(nn_probability_array)
+    max_row, max_col = np.unravel_index(max_index, nn_probability_array.shape)
+    print(f"Max Location: ({max_row}, {max_col})")
 
-    # Plotting training and validation accuracy
-    plt.plot(history.history['mean_absolute_error'], label='Training MAE')
-    plt.plot(history.history['val_mean_absolute_error'], label='Validation MAE')
-    plt.xlabel('Epoch')
-    plt.ylabel('MAE')
-    plt.title('Training and Validation MAE Across Epochs')
-    plt.legend()
-    plt.show()
-    
+    if self.state[max_row][max_col] == '#':
+      print("HIT!")
+      return True
+    if self.state[max_row][max_col] in ('X', 'O'):
+      print("ERROR")
+      return False
+    if self.state[max_row][max_col] == '~':
+      print("miss")
+      return False
     return 0
 
   """MOVE HELPERS"""
@@ -1077,7 +1076,7 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
 
-def main():
+def generate_data():
   # [(board, map), (board, map), ...]
   with open('NNdata', 'rb') as file:
     pairs = pickle.load(file)
@@ -1086,29 +1085,38 @@ def main():
     pairs.append(new_pairs[i])
   with open('NNdata', 'wb') as file:
     pickle.dump(pairs, file)
-
   print(len(pairs))
-  return 0
-  board = BoardState()
-  board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
-                      ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
-                      ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
-                      ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
-                      ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
-                      ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
-                      ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
-                      ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
-                      ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
-                      ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
-  board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
-  board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
 
-  result = board.neural_network_move()
-  return 0
+def main():
+  # if GENERATE_DATA: generate_data()
 
-  for row in heatmap:
-    print(row)
-  return 0
+  # board = BoardState()
+  # board.state =[['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
+  #               ['~', 'O', '#', 'O', 'O', '~', '~', '#', '~', '~'],
+  #               ['~', 'O', '#', '~', '~', '~', '~', '#', '~', '~'],
+  #               ['O', '~', 'X', 'X', '#', '~', '~', '#', '~', '~'],
+  #               ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
+  #               ['~', '~', '#', '~', '~', '~', '~', '~', 'O', '~'],
+  #               ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
+  #               ['#', '#', '#', '#', '~', '~', '~', '~', '~', '~'],
+  #               ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
+  #               ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
+  # board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
+  #                     ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
+  #                     ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
+  #                     ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
+  #                     ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
+  #                     ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
+  #                     ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
+  # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
+  # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
+
+  # result = board.neural_network_move()
+  # return 0
+  
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
