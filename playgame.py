@@ -19,7 +19,7 @@ STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
 NREPS = 10 # Number of times an algorithm tests on a sample board if testing is selected
-NN_NREPS = 10 # Number of samples for training and validation
+NN_NREPS = 50 # Number of samples for training and validation
 H_NREPS = 1000 # Number of sims for get_heatmap
 EPOCHS = 10 # Number of epochs for neural network
 
@@ -1078,16 +1078,17 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   AI_grid.print_grid(fog_of_war=True)
 
 def main():
-  # # [(board, map), (board, map), ...]
-  # with open('NNdata', 'rb') as file:
-  #   pairs = pickle.load(file)
-  # for _ in range(NN_NREPS):
-  #   pairs.append(generate_random_boards_with_heatmaps())
-  # with open('NNdata', 'wb') as file:
-  #     pickle.dump(pairs, file)
+  # [(board, map), (board, map), ...]
+  with open('NNdata', 'rb') as file:
+    pairs = pickle.load(file)
+  new_pairs = generate_random_boards_with_heatmaps()
+  for i in range(NN_NREPS):
+    pairs.append(new_pairs[i])
+  with open('NNdata', 'wb') as file:
+    pickle.dump(pairs, file)
 
-  # print(len(pairs))
-  # return 0
+  print(len(pairs))
+  return 0
   board = BoardState()
   board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
                       ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
