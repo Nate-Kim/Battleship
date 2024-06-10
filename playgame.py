@@ -5,6 +5,8 @@ import copy
 import numpy as np
 from tensorflow.keras.models import Sequential # type: ignore
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape # type: ignore
+from tensorflow.keras.initializers import HeNormal # type: ignore
+from tensorflow.keras.regularizers import l2 # type: ignore
 import matplotlib.pyplot as plt
 import pickle
 
@@ -20,11 +22,10 @@ INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
 NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
 
+H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
+NN_NREPS = 300 # Number of new samples for NN training and validation
+GENERATE_DATA = False  # Generate more samples for NN training and validation
 EPOCHS = 10 # Number of epochs for neural network
-
-NN_NREPS = 300 # Number of new samples for training and validation
-H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap)
-GENERATE_DATA = False  # Generate more samples for training and validation
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -726,16 +727,33 @@ class BoardState:
           test_tensor[row][col][2] = 1
     if self.searching: test_value = self.get_probability_grid()
     else: test_value = self.get_heatmap(nreps=H_NREPS, current_state=self.transform_data())    
+
+    # Normalize test value element magnitudes
+    test_value /= np.max(test_value)
+
     test_data = np.expand_dims(test_tensor, axis=0)
     test_label = np.expand_dims(test_value, axis=0)
 
     loss, accuracy = network.evaluate(test_data, test_label)
     nn_probability_array = np.squeeze(network.predict(test_data))
+
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+        if test_value[row][col] == 0: 
+          nn_probability_array[row][col] = 0
+
     nn_probability_array /= np.max(nn_probability_array) 
     max_index = np.argmax(nn_probability_array)
     max_row, max_col = np.unravel_index(max_index, nn_probability_array.shape)
 
-    prints = True
+    for row in nn_probability_array:
+      print(" ".join(f"{elem:.2f}" for elem in row))
+    print(f"Max Location: ({max_row}, {max_col})")
+    print("True value:")
+    for row in test_value:
+      print(" ".join(f"{elem:.2f}" for elem in row))
+
+    prints = False
     if prints:
       print(f"Loss: {loss}")
       print(f"Root mean squared error: {accuracy}")
@@ -1026,14 +1044,14 @@ class BoardState:
 
     # Define the model
     network = Sequential([
-      Conv2D(25, (5, 5), activation='relu', input_shape=(10, 10, 3)),
+      Conv2D(25, (5, 5), activation='relu', padding="same", kernel_initializer=HeNormal(), kernel_regularizer=l2(0.01), input_shape=(10, 10, 3)),
       Flatten(),
       Dense(100, activation='softmax'),
       Reshape((10, 10, 1))
     ])
     
     # Compile the model
-    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['mean_squared_error'])
     network.fit(training_data, training_labels, epochs=EPOCHS, validation_data=(validation_data, validation_labels))
   
     self.network = network
@@ -1148,6 +1166,9 @@ def generate_data():
     heatmap_list.append(heatmap)
 
   # Transform random boards to a list of one-hot 3D representations
+  # layer 0: unexplored
+  # layer 1: hit and destroyed OR miss
+  # layer 2: hit but not destroyed
   input_tensor_list = []
   for random_board in random_board_list:
     input_tensor = np.zeros((GRID_SIZE, GRID_SIZE, 3))
@@ -1203,7 +1224,7 @@ def main():
   # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
   # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
 
-  # result = board.heatmap_move()
+  # result = board.neural_network_move()
   # return 0
 
   global humanSimSunkResult
