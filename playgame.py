@@ -3,8 +3,8 @@ import os
 import copy
 
 import numpy as np
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape
+from tensorflow.keras.models import Sequential # type: ignore
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape # type: ignore
 import matplotlib.pyplot as plt
 import pickle
 
@@ -22,7 +22,7 @@ NREPS = 1000 # Number of times an algorithm tests on a sample board if testing i
 
 EPOCHS = 10 # Number of epochs for neural network
 
-NN_NREPS = 100 # Number of new samples for training and validation
+NN_NREPS = 300 # Number of new samples for training and validation
 H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap)
 GENERATE_DATA = False  # Generate more samples for training and validation
 
@@ -214,7 +214,7 @@ class BoardState:
   # locations_destroyed is an array of ship location arrays that hold grid location arrays as ints
   # searching tells the NN whether to use heatmap or probability grid, set in transform_data
   def __init__(self, state=None, fog_of_war=None, ships=None, ships_dict=None, 
-               ships_remaining=None, locations_destroyed=None, samples=100, searching=None):
+               ships_remaining=None, locations_destroyed=None, samples=100, searching=None, network=None):
     self.state = state if state is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = fog_of_war if fog_of_war is not None else [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = ships if ships is not None else []
@@ -222,6 +222,7 @@ class BoardState:
     self.ships_remaining = list(SHIPS_NAMES) if ships_remaining is None else list(ships_remaining)
     self.locations_destroyed = [] if locations_destroyed is None else list(locations_destroyed)
     self.searching = True if searching is None else searching
+    self.network = network
 
     self.samples = samples
     self.mcts = mcts(self, samples)
@@ -704,7 +705,7 @@ class BoardState:
           self.fog_of_war[row][col] = 'O'
           self.state[row][col] = 'O'
           return False
-  # Chooses a move based on Monte Carlo Tree Search
+  # Chooses a move based on Monte Carlo Simulation
   #  returns a boolean, True for ship hit or False for ship not hit
   def AI_mcts_move(self) -> bool:
     return self.mcts.ai_mcts_move()
@@ -724,90 +725,74 @@ class BoardState:
       - Ideally should target locations near existing 2's
       - The generated data 
     """
+    if self.network == None:
+      self.train_neural_network()
+    
+    network = self.network
 
-    # [(transformed state, heatmap), ...]
-    with open('NNdata', 'rb') as file:
-      pairs = pickle.load(file)
-
-    random_board_list = []
-    heatmap_list = []
-    for pair in pairs:
-      (random_board, heatmap) = pair
-      random_board_list.append(random_board)
-      heatmap_list.append(heatmap)
-    # Transform input data to a list of one-hot 3D representations
-    # layer 0 locations that can be chosen
-    # layer 1 is locations that cannot be chosen
-    # layer 2 is locations that cannot be hit but are encoded on a different layer (undestroyed ships)
-    input_tensor_list = []
-    for random_board in random_board_list:
-      input_tensor = np.zeros((10, 10, 3))
-      for row in range(GRID_SIZE):
-        for col in range(GRID_SIZE):
-          if random_board[row][col] == 0:
-            input_tensor[row][col][0] = 1
-          elif random_board[row][col] == 1:
-            input_tensor[row][col][1] = 1
-          elif random_board[row][col] == 2:
-            input_tensor[row][col][2] = 1
-      input_tensor_list.append(input_tensor)
-
-    test_data = self.fog_of_war
+    # input state
+    transformed_state = self.transform_data()
     test_tensor = np.zeros((10, 10, 3))
-    # Transform test data the same way as input data
     for row in range(GRID_SIZE):
       for col in range(GRID_SIZE):
-        if test_data[row][col] == 0:
+        if transformed_state[row][col] == 0:
           test_tensor[row][col][0] = 1
-        elif test_data[row][col] == 1:
+        if transformed_state[row][col] == 1:
           test_tensor[row][col][1] = 1
-        elif test_data[row][col] == 2:
+        if transformed_state[row][col] == 2:
           test_tensor[row][col][2] = 1
     if self.searching: test_value = self.get_probability_grid()
     else: test_value = self.get_heatmap(nreps=H_NREPS, current_state=self.transform_data())    
-
-    # 80:20 split
-    training_data = np.array(input_tensor_list[:int(len(input_tensor_list) * 0.8)])
-    training_labels = np.array(heatmap_list[:int(len(heatmap_list) * 0.8)])
-    validation_data = np.array(input_tensor_list[int(len(input_tensor_list) * 0.8):])
-    validation_labels = np.array(heatmap_list[int(len(heatmap_list) * 0.8):])
-    # input state
     test_data = np.expand_dims(test_tensor, axis=0)
     test_label = np.expand_dims(test_value, axis=0)
 
-    # Define the model
-    network = Sequential([
-      Conv2D(25, (5, 5), padding='same', activation='relu', input_shape=(10, 10, 3)),
-      Flatten(),
-      Dense(100, activation='sigmoid'),
-      Reshape((10, 10))
-    ])
-    
-    # Compile the model
-    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    network.fit(training_data, training_labels, epochs=EPOCHS, batch_size=20, validation_data=(validation_data, validation_labels))
     loss, accuracy = network.evaluate(test_data, test_label)
-    print(f"Loss: {loss}")
-    print(f"Root mean squared error: {accuracy}")
-
     nn_probability_array = np.squeeze(network.predict(test_data))
     nn_probability_array /= np.max(nn_probability_array) 
-    print(nn_probability_array)
-
     max_index = np.argmax(nn_probability_array)
     max_row, max_col = np.unravel_index(max_index, nn_probability_array.shape)
-    print(f"Max Location: ({max_row}, {max_col})")
+
+    prints = True
+    if prints:
+      print(f"Loss: {loss}")
+      print(f"Root mean squared error: {accuracy}")
+      print(nn_probability_array)
+      print(f"Max Location: ({max_row}, {max_col})")
 
     if self.state[max_row][max_col] == '#':
-      print("HIT!")
+      if prints: print("HIT!")         
+      self.fog_of_war[max_row][max_col] = 'X'
+      self.state[max_row][max_col] = 'X'
       return True
-    if self.state[max_row][max_col] in ('X', 'O'):
-      print("ERROR")
-      return False
     if self.state[max_row][max_col] == '~':
-      print("miss")
+      if prints: print("miss")
+      self.fog_of_war[max_row][max_col] = 'O'
+      self.state[max_row][max_col] = 'O'
       return False
-    return 0
+    if self.state[max_row][max_col] in ('X', 'O'):
+      if prints: print("ERROR")
+      return False
+  # Chooses a move based on heatmap strategy
+  #  returns a boolean, True for ship hit or False for ship not hit
+  def heatmap_move(self) -> bool:
+    # prob. grid has 0-1 values, get_heatmap has absolute values
+    if self.searching: heatmap = np.array(self.get_probability_grid())
+    else: heatmap = np.array(self.get_heatmap(nreps=H_NREPS, current_state=self.transform_data()))
+    
+
+    max_index = np.argmax(heatmap)
+    max_row, max_col = np.unravel_index(max_index, heatmap.shape)
+
+    if self.state[max_row][max_col] == '#':        
+      self.fog_of_war[max_row][max_col] = 'X'
+      self.state[max_row][max_col] = 'X'
+      self.searching = False
+      return True
+    if self.state[max_row][max_col] == '~':
+      self.fog_of_war[max_row][max_col] = 'O'
+      self.state[max_row][max_col] = 'O'
+      return False
+
 
   """MOVE HELPERS"""
   # Generates all possible positions of all remaining ships and hits position with highest of existence
@@ -941,10 +926,16 @@ class BoardState:
     for _ in range(nreps):
       test_grid = copy.deepcopy(current_state)
       num_overlaps = 0
+      new_grid = False
       # Simulate ship placements on board
       for ship in self.ships_remaining:
         # Until the ship is properly placed
+        attempts = 0
         while True:
+          if attempts >= 500: 
+            new_grid = True
+            break
+          attempts += 1
           # Get a coordinate value not already used
           while True:
             random_row = random.randint(0, GRID_SIZE - 1)
@@ -1003,6 +994,8 @@ class BoardState:
                 num_overlaps += 1
 
           break
+        if new_grid: break
+      
       for _ in range(num_overlaps+1):
         heatmap_list.append(test_grid)
     
@@ -1016,13 +1009,11 @@ class BoardState:
             heatmap[row][col] += 1
 
     return heatmap
+  # Modify fog of war input
+  # 0: unexplored
+  # 1: hit and destroyed OR miss
+  # 2: hit but not destroyed
   def transform_data(self):
-    # Modify fog of war input
-    # 0: unexplored
-    # 1: hit and destroyed OR miss
-    # 2: hit but not destroyed
-    # 3: ship simulated
-    # 4: ship simulated on top of undestroyed ship
     current_state = copy.deepcopy(self.fog_of_war)
     self.searching = True
     for row in range(GRID_SIZE):
@@ -1037,14 +1028,46 @@ class BoardState:
         else:
           current_state[row][col] = 0
     return current_state
+  def train_neural_network(self):
+    # [(transformed state, heatmap), ...]
+    with open('NNdata', 'rb') as file:
+      pairs = pickle.load(file)
   
+    input_tensor_list = []
+    heatmap_list = []
+    for pair in pairs:
+      (input_tensor, heatmap) = pair
+      input_tensor_list.append(input_tensor)
+      heatmap_list.append(heatmap)
+
+    # 80:20 split
+    training_data = np.array(input_tensor_list[:int(len(input_tensor_list) * 0.8)])
+    training_labels = np.array(heatmap_list[:int(len(heatmap_list) * 0.8)])
+    validation_data = np.array(input_tensor_list[int(len(input_tensor_list) * 0.8):])
+    validation_labels = np.array(heatmap_list[int(len(heatmap_list) * 0.8):])
+
+    # Define the model
+    network = Sequential([
+      Conv2D(25, (5, 5), activation='relu', input_shape=(10, 10, 3)),
+      Flatten(),
+      Dense(100, activation='softmax'),
+      Reshape((10, 10, 1))
+    ])
+    
+    # Compile the model
+    network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    network.fit(training_data, training_labels, epochs=EPOCHS, validation_data=(validation_data, validation_labels))
+  
+    self.network = network
+
   # General AI move
   #  returns a boolean, True for ship hit or False for ship not hit
   def gen_AI_move(self, style_choice: int) -> bool:
     if style_choice == 1: return self.random_move()
     if style_choice == 2: return self.human_sim_move()
     if style_choice == 3: return self.AI_mcts_move()
-    if style_choice == 4: return self.AI_tree_move()
+    if style_choice == 4: return self.neural_network_move()
+    if style_choice == 5: return self.heatmap_move()
 
 # Generate a random board for the NN to train on
 #  return (transformed_board, heatmap)
@@ -1095,8 +1118,9 @@ def choose_AI_type(choice: int) -> int:
         print("Random moves: 1")
         print("Simulated player (even strategy): 2")
         print("Simulated player (probabilistic strategy): 3")
-        print("Monte Carlo Search Tree: 4")
-        print("Tree move with probability: 5")
+        print("Monte Carlo Simulation: 4")
+        print("Neural Network: 5")
+        print("Heatmap: 6")
         choice = input()
         if choice == '1': return 1
         if choice == '2': return 2
@@ -1106,6 +1130,7 @@ def choose_AI_type(choice: int) -> int:
             return 2
         if choice == '4': return 3
         if choice == '5': return 4
+        if choice == '6': return 5
     
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
@@ -1132,20 +1157,50 @@ def print_end_message(player_grid, AI_grid, player_win: bool, move_count: int) -
   print("Enemy grid")
   AI_grid.print_grid(fog_of_war=True)
 
+# Generate NN data
 def generate_data():
-  # [(board, map), (board, map), ...]
+  # [(input_tensor, heatmap), (input_tensor, heatmap), ...]  
+  new_pairs = generate_random_boards_with_heatmaps()
+  random_board_list = []
+  heatmap_list = []
+
+  for pair in new_pairs:
+    random_board, heatmap = pair
+    random_board_list.append(random_board)
+    heatmap_list.append(heatmap)
+
+  # Transform random boards to a list of one-hot 3D representations
+  input_tensor_list = []
+  for random_board in random_board_list:
+    input_tensor = np.zeros((GRID_SIZE, GRID_SIZE, 3))
+    for row in range(GRID_SIZE):
+      for col in range(GRID_SIZE):
+        if random_board[row][col] == 0:
+          input_tensor[row][col][0] = 1
+        if random_board[row][col] == 1:
+          input_tensor[row][col][1] = 1
+        if random_board[row][col] == 2:
+          input_tensor[row][col][2] = 1
+        input_tensor_list.append(input_tensor)
+
+  # Create a new list for the new pairs
+  new_pairs_transformed = [(input_tensor_list[i], heatmap_list[i]) for i in range(len(new_pairs))]
+
+  # Append to current list and write to file
   with open('NNdata', 'rb') as file:
     pairs = pickle.load(file)
-  new_pairs = generate_random_boards_with_heatmaps()
-  for i in range(NN_NREPS):
-    pairs.append(new_pairs[i])
+  for i in range(len(new_pairs_transformed)):
+    pairs.append(new_pairs_transformed[i])
   with open('NNdata', 'wb') as file:
     pickle.dump(pairs, file)
-  print(len(pairs))
+
+  print(f"{len(pairs)} pairings (tensor input, heatmap) in data.")
 
 def main():
-  # if GENERATE_DATA: generate_data()
-
+  if GENERATE_DATA: 
+    generate_data()
+    return 0
+  
   # board = BoardState()
   # board.state =[['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
   #               ['~', 'O', '#', 'O', 'O', '~', '~', '#', '~', '~'],
@@ -1170,9 +1225,9 @@ def main():
   # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
   # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
 
-  # result = board.neural_network_move()
+  # result = board.heatmap_move()
   # return 0
-  
+
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
   play_or_test = choose_play_or_test()
@@ -1271,6 +1326,16 @@ def main():
         if len(test_grid.ships_remaining) == 0: 
           rep_history.append(count_AI)
           break
+    # Heatmap is compute-heavy so its reps are stored
+    if style_choice == 5:
+      with open('HeatmapMoves', 'rb') as file:
+        previous_rep_history = pickle.load(file)  
+      for i in range(len(rep_history)):
+        previous_rep_history.append(rep_history[i])
+      with open('HeatmapMoves', 'wb') as file:
+        pickle.dump(rep_history, file)
+      rep_history = previous_rep_history
+      nreps = len(rep_history) # because nreps is used in the avg calculation
     # After all testing, show average moves for the AI to win
     clear_console()
     print(f"It took the AI {sum(rep_history)/nreps} moves on average to win!")
