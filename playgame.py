@@ -26,6 +26,7 @@ clearHitMarkers = False
 humanSimSunkResult = ""
 probableHuman = False #boolean variable. True is to do probability strat and false is to do even strat
 removeFromStackCount = int
+isAppended = False
 
 def clear_console():
   os.system('cls' if os.name == 'nt' else 'clear')
@@ -372,18 +373,24 @@ class BoardState:
     global targetMode
     global destroyMode
     global humanSimSunkResult
-
+    global hitMarkers
+    global clearHitMarkers
+    global isAppended
     self.state = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.fog_of_war = [['~'] * GRID_SIZE for _ in range(GRID_SIZE)]
     self.ships = []
     self.ships_dict = {}
     self.ships_remaining = list(SHIPS_NAMES)
+    self.locations_destroyed = []
     rowNum = 0
     colNum = 0
     targetStack = []
+    hitMarkers = []
     targetMode = False
     destroyMode = False
+    clearHitMarkers = False
     humanSimSunkResult = ""
+    isAppended = False
     #reset global variables
 
   """MOVE OPTIONS"""
@@ -443,25 +450,23 @@ class BoardState:
     global humanSimSunkResult
     global probableHuman
     global removeFromStackCount
+    global isAppended
+
     #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
-      destroyMode = False
-      targetStack.pop() #popping to ge rid of the choice the destroy mode added last call of human_sim_move
+      
+      if(destroyMode and len(targetStack) != 0 and isAppended):
+        targetStack.pop() #popping to ge rid of the choice the destroy mode added last call of human_sim_move
       #latestDirection = hitMarkers[len(hitMarkers) -1][2]
+      destroyMode = False
       shipSunkList = self.locations_destroyed[len(self.locations_destroyed) - 1]
       #since a ship was destroyed, remove all hit markers releated to that destroyed ship
-      print(shipSunkList)
-      print(hitMarkers)
       listTemp = []
       for x in hitMarkers:
         if(not([x[0], x[1]] in shipSunkList)):
-          print("keeping [" + str(x[0]) + ", " + str(x[1]) + "]")
-          #hitMarkers.remove(x)
           listTemp.append(x)
-        else:
-          print("removing [" + str(x[0]) + ", " + str(x[1]) + "]")
       hitMarkers = listTemp
-      print(hitMarkers)
+
       #i = len(hitMarkers) -1
       #while(i >= 0):
         #if(hitMarkers[i][2] == latestDirection):
@@ -471,7 +476,11 @@ class BoardState:
         #i -= 1
       #hitMarkers.pop() #removing the hitmarker that acts as the pivot point between the two cardinal directions
       if(len(hitMarkers) == 0): # only clear when there are no more hitmarkers to investigate
-        targetStack[:] = [] #clear list
+        targetStack = [] #clear list
+        #go back to searching we used all the info we had on the destroyed ships
+        clearHitMarkers = False
+        destroyMode = False
+        targetMode = False
       else:
         clearHitMarkers = True
         removeFromStackCount = self.check_hit_markers()
@@ -479,6 +488,7 @@ class BoardState:
     #enabled if the algorithm hits any ship part
     #adds adjacent tiles to the stack to iterate through
     if (targetMode):
+      isBlocked = False
       move = targetStack.pop()
       if self.state[move[0]][move[1]] not in ('X', 'O'):
         if self.state[move[0]][move[1]] == '#':
@@ -488,17 +498,30 @@ class BoardState:
           if (move[2] == "up"):
             if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('X', 'O')):
               targetStack.append((move[0] - 1, move[1], "up"))
+            else:
+              isBlocked = True
           elif (move[2] == "down"):
             if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('X', 'O')):
               targetStack.append((move[0] + 1, move[1], "down"))
+            else:
+              isBlocked = True
           elif (move[2] == "left"):
             if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('X', 'O')):
               targetStack.append((move[0], move[1] - 1, "left"))
+            else:
+              isBlocked = True
           else:  # right
             if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('X', 'O')):
               targetStack.append((move[0], move[1] + 1, "right"))
-          targetMode = False # turns off target mode and enable destroy mode to pop the stack and destroy ship
-          destroyMode = True
+            else:
+              isBlocked = True
+          if(isBlocked):
+            targetMode = False
+            clearHitMarkers = True
+            self.check_hit_markers()
+          else:
+            targetMode = False # turns off target mode and enable destroy mode to pop the stack and destroy ship
+            destroyMode = True
           return True
         else:  # is ~
           self.fog_of_war[move[0]][move[1]] = 'O'
@@ -510,19 +533,19 @@ class BoardState:
         move = targetStack.pop() #grabs latest tile and hits
         if self.state[move[0]][move[1]] not in ('O'):
           if (move[2] == "up"):
-            if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('O')):
+            if (move[0] - 1 >= 0 and self.state[move[0] - 1][move[1]] not in ('O', 'X')):
               targetStack.append((move[0] - 1, move[1], "up"))
               isAppended = True
           elif (move[2] == "down"):
-            if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('O')):
+            if (move[0] + 1 <= 9 and self.state[move[0] + 1][move[1]] not in ('O', 'X')):
               targetStack.append((move[0] + 1, move[1], "down"))
               isAppended = True
           elif (move[2] == "left"):
-            if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('O')):
+            if (move[1] - 1 >= 0 and self.state[move[0]][move[1] - 1] not in ('O', 'X')):
               targetStack.append((move[0], move[1] - 1, "left"))
               isAppended = True
           else:  # right
-            if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('O')):
+            if (move[1] + 1 <= 9 and self.state[move[0]][move[1] + 1] not in ('O', 'X')):
               targetStack.append((move[0], move[1] + 1, "right"))
               isAppended = True
           if self.state[move[0]][move[1]] not in ('X'):
@@ -538,6 +561,9 @@ class BoardState:
                 #algorithm was certain it can destroy a ship in this particular cardinal direction. So this must mean the algorithm has hit multiple ships lined up together 
                 # remove latest append since we have discovered the current move is a miss 
                 targetStack.pop() 
+              else: # ELSE BODY IS A NEW ADDITION
+                clearHitMarkers=True
+                self.check_hit_markers()
               destroyMode = False
               clearHitMarkers = True
               removeFromStackCount = self.check_hit_markers()
@@ -545,30 +571,37 @@ class BoardState:
     elif(clearHitMarkers):
       #behave similar to target mode: pop decisions until a hit is found. Then destroy that ship with destroy mode
       move = targetStack.pop()
+      isAppended = False
       #if(removeFromStackCount != 0):
         #removeFromStackCount -= 1
+      while(self.state[move[0]][move[1]] in ('O', 'X')):
+        move = targetStack.pop()
       if(self.state[move[0]][move[1]] == '#'):
         self.fog_of_war[move[0]][move[1]] = 'X'
         self.state[move[0]][move[1]] = 'X'
         hitMarkers.append(move)
         #for i in range(removeFromStackCount):
           #targetStack.pop()
-        if(move[2] == "up"):
+        if(move[2] == "up" and move[0] - 1 >= 0 and self.fog_of_war[move[0] - 1][move[1]] == "~"):
           #if(self.fog_of_war[move[0] + 1][move[1]] == '~' and move[0] + 1 <=9):
             #targetStack.append((move[0] + 1, move[1], "down"))
           targetStack.append((move[0] - 1, move[1], "up"))
-        elif(move[2] == "down"):
+          isAppended = True
+        elif(move[2] == "down" and move[0] + 1 <= 9 and self.fog_of_war[move[0] + 1][move[1]] == "~"):
           #if(self.fog_of_war[move[0] - 1][move[1]] == '~' and move[0] - 1 >= 0):
             #targetStack.append((move[0] - 1, move[1], "up"))
           targetStack.append((move[0] + 1, move[1], "down"))
-        elif(move[2] == "left"):
+          isAppended = True
+        elif(move[2] == "left" and move[1] - 1 >= 0 and self.fog_of_war[move[0]][move[1] - 1] == "~"):
           #if(self.fog_of_war[move[0]][move[1] + 1] == '~' and move[1] + 1 <= 9):
             #targetStack.append((move[0], move[1] + 1, "right"))
           targetStack.append((move[0], move[1] - 1, "left"))
-        else: #right
+          isAppended = True
+        elif(move[2] == "right" and move[1] + 1 <= 9 and self.fog_of_war[move[0]][move[1] + 1] == "~"): #right
           #if(self.fog_of_war[move[0]][move[1] - 1] == '~' and move[1] - 1 >= 0):
             #targetStack.append((move[0], move[1] - 1, "left"))
           targetStack.append((move[0], move[1] + 1, "right"))
+          isAppended = True
         clearHitMarkers = False
         destroyMode = True
         #loop gets rid of choices added by set up target mode during clear hit marker stage since we don't need to consider the other options we haven't popped yet
@@ -747,7 +780,8 @@ class BoardState:
     return count # count is only for knowing how many choices to remove during clear hit marker stage
   def check_hit_markers(self) -> int:
     global hitMarkers
-    marker = hitMarkers.pop()
+    #marker = hitMarkers.pop()
+    marker = hitMarkers[len(hitMarkers) - 1]
     if(marker[2] != "start"):
       return self.set_up_target_mode(marker[0], marker[1])
     else:
@@ -937,7 +971,7 @@ def choose_AI_type(choice: int) -> int:
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
-  #clear_console()
+  clear_console()
   print(player_move_result)
   print(AI_move_result)
   # Show both grids to player with proper fog of war
