@@ -18,7 +18,7 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 1000 # Number of times an algorithm tests on a sample board if testing is selected
 
 EPOCHS = 10 # Number of epochs for neural network
 
@@ -465,21 +465,30 @@ class BoardState:
     global removeFromStackCount
     global isAppended
 
+    print("target stack")
+    print(targetStack)
     #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
-      
       if(destroyMode and len(targetStack) != 0 and isAppended):
         targetStack.pop() #popping to ge rid of the choice the destroy mode added last call of human_sim_move
       #latestDirection = hitMarkers[len(hitMarkers) -1][2]
       destroyMode = False
       shipSunkList = self.locations_destroyed[len(self.locations_destroyed) - 1]
+      print("destroyed ship coords")
+      print(shipSunkList)
+      print("hit markers")
+      print(hitMarkers)
       #since a ship was destroyed, remove all hit markers releated to that destroyed ship
       listTemp = []
       for x in hitMarkers:
         if(not([x[0], x[1]] in shipSunkList)):
           listTemp.append(x)
+          print("keep " + str(x))
+        else:
+          print("remove " + str(x))
       hitMarkers = listTemp
-
+      print("hitmarkers afterwards")
+      print(hitMarkers)
       #i = len(hitMarkers) -1
       #while(i >= 0):
         #if(hitMarkers[i][2] == latestDirection):
@@ -488,6 +497,8 @@ class BoardState:
           #break
         #i -= 1
       #hitMarkers.pop() #removing the hitmarker that acts as the pivot point between the two cardinal directions
+      
+      
       if(len(hitMarkers) == 0): # only clear when there are no more hitmarkers to investigate
         targetStack = [] #clear list
         #go back to searching we used all the info we had on the destroyed ships
@@ -496,11 +507,14 @@ class BoardState:
         targetMode = False
       else:
         clearHitMarkers = True
-        removeFromStackCount = self.check_hit_markers()
+        self.check_hit_markers()
       humanSimSunkResult = ""
+      print("target stack afterwards")
+      print(targetStack)
     #enabled if the algorithm hits any ship part
     #adds adjacent tiles to the stack to iterate through
     if (targetMode):
+      print("targetMode")
       isBlocked = False
       move = targetStack.pop()
       if self.state[move[0]][move[1]] not in ('X', 'O'):
@@ -541,6 +555,7 @@ class BoardState:
           self.state[move[0]][move[1]] = 'O'
           return False
     elif (destroyMode):
+      print("destroyMode")
       while(True):
         isAppended = False
         move = targetStack.pop() #grabs latest tile and hits
@@ -579,9 +594,10 @@ class BoardState:
                 self.check_hit_markers()
               destroyMode = False
               clearHitMarkers = True
-              removeFromStackCount = self.check_hit_markers()
+              self.check_hit_markers()
               return False
     elif(clearHitMarkers):
+      print("clearHitMarkers")
       #behave similar to target mode: pop decisions until a hit is found. Then destroy that ship with destroy mode
       move = targetStack.pop()
       isAppended = False
@@ -626,6 +642,7 @@ class BoardState:
       return False
 
     else: #this is the search pattern. Hits tiles in a checkerboard style
+      print("search")
       if probableHuman:
         decision = self.get_max_probability()
         if self.state[decision[0]][decision[1]] == '#':
@@ -897,14 +914,19 @@ class BoardState:
       targetStack.append((rowNum, colNum + 1, "right"))
       count += 1
     return count # count is only for knowing how many choices to remove during clear hit marker stage
-  def check_hit_markers(self) -> int:
+  def check_hit_markers(self):
     global hitMarkers
     #marker = hitMarkers.pop()
-    marker = hitMarkers[len(hitMarkers) - 1]
-    if(marker[2] != "start"):
-      return self.set_up_target_mode(marker[0], marker[1])
-    else:
-      return 0
+    i = 1
+    while(i <= len(hitMarkers)):
+      marker = hitMarkers[len(hitMarkers) - i]
+      if(marker[2] != "start"):
+        result = self.set_up_target_mode(marker[0], marker[1])
+        if(result != 0):
+          break
+      else:
+        break
+      i += 1
   # NN helpers
   def get_heatmap(self, nreps, current_state):
     """
@@ -1088,7 +1110,7 @@ def choose_AI_type(choice: int) -> int:
 # Print the user interface for each turn
 def print_UI(player_grid, AI_grid, player_move_result: str, AI_move_result: str) -> None:
   # Show results of previous turn (or help messages if on first turn)
-  clear_console()
+  #clear_console()
   print(player_move_result)
   print(AI_move_result)
   # Show both grids to player with proper fog of war
@@ -1225,7 +1247,7 @@ def main():
     # Will hold number of moves for each rep
     rep_history = []
     # Get all simulation data
-    for _ in range(nreps):
+    for i in range(nreps):
       # Reset the board with new ship placements
       test_grid.reset()
       for ship_name in SHIPS_NAMES: test_grid.randomly_place_ship(ship_name)
@@ -1234,7 +1256,12 @@ def main():
       # Simulate a game
       while True:
         # Make AI move according to player choice
-        _ = test_grid.gen_AI_move(style_choice)
+        try:
+          _ = test_grid.gen_AI_move(style_choice)
+        except:
+          print(i)
+          test_grid.print_grid(fog_of_war=False)
+          return
         count_AI += 1
         # Needed to update ships_remaining 
         result = test_grid.check_ship_sunk()
