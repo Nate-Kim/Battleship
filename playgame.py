@@ -20,12 +20,12 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 5 # Number of times an algorithm tests on a sample board if testing is selected
 
 H_NREPS = 5000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
 NN_NREPS = 300 # Number of new samples for NN training and validation
 GENERATE_DATA = False  # Generate more samples for NN training and validation
-EPOCHS = 250 # Number of epochs for neural network
+EPOCHS = 200 # Number of epochs for neural network
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -1223,31 +1223,10 @@ def main():
     generate_data()
     return 0
   
-  # board = BoardState()
-  # board.state =[['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
-  #               ['~', 'O', '#', 'O', 'O', '~', '~', '#', '~', '~'],
-  #               ['~', 'O', '#', '~', '~', '~', '~', '#', '~', '~'],
-  #               ['O', '~', 'X', 'X', '#', '~', '~', '#', '~', '~'],
-  #               ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
-  #               ['~', '~', '#', '~', '~', '~', '~', '~', 'O', '~'],
-  #               ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
-  #               ['#', '#', '#', '#', '~', '~', '~', '~', '~', '~'],
-  #               ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
-  #               ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
-  # board.fog_of_war = [['~', '~', 'O', '~', '~', '~', '~', '~', '~', '~'],
-  #                     ['~', 'O', '~', 'O', 'O', '~', '~', '~', '~', '~'],
-  #                     ['~', 'O', '~', '~', '~', '~', '~', '~', '~', '~'],
-  #                     ['O', '~', 'X', 'X', '~', '~', '~', '~', '~', '~'],
-  #                     ['~', 'O', 'X', 'O', '~', 'O', '~', '~', '~', '~'],
-  #                     ['~', '~', '~', '~', '~', '~', '~', '~', 'O', '~'],
-  #                     ['~', '~', '~', '~', '~', 'O', 'O', '~', '~', '~'],
-  #                     ['~', '~', '~', '~', '~', '~', '~', '~', '~', '~'],
-  #                     ['O', '~', '~', '~', 'O', '~', '~', '~', '~', '~'],
-  #                     ['~', '~', 'O', '~', 'X', 'X', 'X', '~', '~', '~']]
-  # board.locations_destroyed = [[[9, 4], [9, 5], [9, 6]]]
-  # board.ships_remaining = ["aircraft carrier", "battleship", "submarine", "destroyer"]
-
-  # result = board.neural_network_move()
+  # with open('NeuralNetworkMoves', 'rb') as file:
+  #   previous_rep_history = pickle.load(file)  
+  # print(previous_rep_history)
+  # print(len(previous_rep_history))
   # return 0
 
   global humanSimSunkResult
@@ -1350,7 +1329,7 @@ def main():
       for i in range(len(rep_history)):
         previous_rep_history.append(rep_history[i])
       with open('NeuralNetworkMoves', 'wb') as file:
-        pickle.dump(rep_history, file)
+        pickle.dump(previous_rep_history, file)
       rep_history = previous_rep_history
       nreps = len(rep_history) # because nreps is used in the avg calculation
     # Heatmap is compute-heavy so its reps are stored
