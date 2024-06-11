@@ -4,7 +4,7 @@ import copy
 
 import numpy as np
 from tensorflow.keras.models import Sequential # type: ignore
-from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape # type: ignore
+from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape, Input # type: ignore
 from tensorflow.keras.initializers import HeNormal # type: ignore
 from tensorflow.keras.regularizers import l2 # type: ignore
 import matplotlib.pyplot as plt
@@ -20,12 +20,12 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 1000 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
 
-H_NREPS = 1000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
+H_NREPS = 5000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
 NN_NREPS = 300 # Number of new samples for NN training and validation
 GENERATE_DATA = False  # Generate more samples for NN training and validation
-EPOCHS = 10 # Number of epochs for neural network
+EPOCHS = 250 # Number of epochs for neural network
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -467,8 +467,8 @@ class BoardState:
     global removeFromStackCount
     global isAppended
 
-    print("target stack")
-    print(targetStack)
+    # print("target stack")
+    # print(targetStack)
     #disables destroying of ships and clears the stack of tiles to hit if the ship is destroyed statement comes up
     if (humanSimSunkResult != ""):
       if(destroyMode and len(targetStack) != 0 and isAppended):
@@ -476,21 +476,21 @@ class BoardState:
       #latestDirection = hitMarkers[len(hitMarkers) -1][2]
       destroyMode = False
       shipSunkList = self.locations_destroyed[len(self.locations_destroyed) - 1]
-      print("destroyed ship coords")
-      print(shipSunkList)
-      print("hit markers")
-      print(hitMarkers)
+      # print("destroyed ship coords")
+      # print(shipSunkList)
+      # print("hit markers")
+      # print(hitMarkers)
       #since a ship was destroyed, remove all hit markers releated to that destroyed ship
       listTemp = []
       for x in hitMarkers:
         if(not([x[0], x[1]] in shipSunkList)):
           listTemp.append(x)
-          print("keep " + str(x))
-        else:
-          print("remove " + str(x))
+          #print("keep " + str(x))
+        # else:
+          #print("remove " + str(x))
       hitMarkers = listTemp
-      print("hitmarkers afterwards")
-      print(hitMarkers)
+      # print("hitmarkers afterwards")
+      # print(hitMarkers)
       #i = len(hitMarkers) -1
       #while(i >= 0):
         #if(hitMarkers[i][2] == latestDirection):
@@ -511,12 +511,12 @@ class BoardState:
         clearHitMarkers = True
         self.check_hit_markers()
       humanSimSunkResult = ""
-      print("target stack afterwards")
-      print(targetStack)
+      # print("target stack afterwards")
+      # print(targetStack)
     #enabled if the algorithm hits any ship part
     #adds adjacent tiles to the stack to iterate through
     if (targetMode):
-      print("targetMode")
+      #print("targetMode")
       isBlocked = False
       move = targetStack.pop()
       if self.state[move[0]][move[1]] not in ('X', 'O'):
@@ -557,7 +557,7 @@ class BoardState:
           self.state[move[0]][move[1]] = 'O'
           return False
     elif (destroyMode):
-      print("destroyMode")
+      #print("destroyMode")
       while(True):
         isAppended = False
         move = targetStack.pop() #grabs latest tile and hits
@@ -599,7 +599,7 @@ class BoardState:
               self.check_hit_markers()
               return False
     elif(clearHitMarkers):
-      print("clearHitMarkers")
+      #print("clearHitMarkers")
       #behave similar to target mode: pop decisions until a hit is found. Then destroy that ship with destroy mode
       move = targetStack.pop()
       isAppended = False
@@ -644,7 +644,7 @@ class BoardState:
       return False
 
     else: #this is the search pattern. Hits tiles in a checkerboard style
-      print("search")
+      #print("search")
       if probableHuman:
         decision = self.get_max_probability()
         if self.state[decision[0]][decision[1]] == '#':
@@ -751,8 +751,8 @@ class BoardState:
     test_data = np.expand_dims(test_tensor, axis=0)
     test_label = np.expand_dims(test_value, axis=0)
 
-    loss, accuracy = network.evaluate(test_data, test_label)
-    nn_probability_array = np.squeeze(network.predict(test_data))
+    loss, accuracy = network.evaluate(test_data, test_label, verbose=0)
+    nn_probability_array = np.squeeze(network.predict(test_data, verbose=0))
 
     for row in range(GRID_SIZE):
       for col in range(GRID_SIZE):
@@ -762,33 +762,32 @@ class BoardState:
     nn_probability_array /= np.max(nn_probability_array) 
     max_index = np.argmax(nn_probability_array)
     max_row, max_col = np.unravel_index(max_index, nn_probability_array.shape)
+    comparisons = False
+    if comparisons:
+      corresponding_in_pgrid = test_value[max_row][max_col]
+      flattened_array = np.array(test_value).flatten()
+      sorted_array = np.sort(flattened_array)[::-1]
+      for i in range(len(sorted_array)):
+        if sorted_array[i] == corresponding_in_pgrid:
+          print("Next move:")
+          print(f"Max Location: ({max_row}, {max_col})")
+          print(f"That is the {i} best move.")
+          break
 
-    for row in nn_probability_array:
-      print(" ".join(f"{elem:.2f}" for elem in row))
-    print(f"Max Location: ({max_row}, {max_col})")
-    print("True value:")
-    for row in test_value:
-      print(" ".join(f"{elem:.2f}" for elem in row))
-
-    prints = False
-    if prints:
+    stats = False
+    if stats:
       print(f"Loss: {loss}")
       print(f"Root mean squared error: {accuracy}")
       print(nn_probability_array)
       print(f"Max Location: ({max_row}, {max_col})")
 
-    if self.state[max_row][max_col] == '#':
-      if prints: print("HIT!")         
+    if self.state[max_row][max_col] == '#':        
       self.fog_of_war[max_row][max_col] = 'X'
       self.state[max_row][max_col] = 'X'
       return True
     if self.state[max_row][max_col] == '~':
-      if prints: print("miss")
       self.fog_of_war[max_row][max_col] = 'O'
       self.state[max_row][max_col] = 'O'
-      return False
-    if self.state[max_row][max_col] in ('X', 'O'):
-      if prints: print("ERROR")
       return False
   # Chooses a move based on heatmap strategy
   #  returns a boolean, True for ship hit or False for ship not hit
@@ -1048,7 +1047,7 @@ class BoardState:
     return current_state
   def train_neural_network(self):
     # [(transformed state, heatmap), ...]
-    with open('NNdata', 'rb') as file:
+    with open('NeuralNetworkData', 'rb') as file:
       pairs = pickle.load(file)
   
     input_tensor_list = []
@@ -1066,7 +1065,8 @@ class BoardState:
 
     # Define the model
     network = Sequential([
-      Conv2D(25, (5, 5), activation='relu', padding="same", kernel_initializer=HeNormal(), kernel_regularizer=l2(0.01), input_shape=(10, 10, 3)),
+      Input(shape=(10, 10, 3)),
+      Conv2D(25, (5, 5), activation='relu', padding="same", kernel_initializer=HeNormal(), kernel_regularizer=l2(0.01)),
       Flatten(),
       Dense(100, activation='softmax'),
       Reshape((10, 10, 1))
@@ -1074,7 +1074,8 @@ class BoardState:
     
     # Compile the model
     network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['mean_squared_error'])
-    network.fit(training_data, training_labels, epochs=EPOCHS, validation_data=(validation_data, validation_labels))
+    network.fit(training_data, training_labels, epochs=EPOCHS, verbose=0, validation_data=(validation_data, validation_labels))
+    network.summary()
   
     self.network = network
 
@@ -1208,11 +1209,11 @@ def generate_data():
   new_pairs_transformed = [(input_tensor_list[i], heatmap_list[i]) for i in range(len(new_pairs))]
 
   # Append to current list and write to file
-  with open('NNdata', 'rb') as file:
+  with open('NeuralNetworkData', 'rb') as file:
     pairs = pickle.load(file)
   for i in range(len(new_pairs_transformed)):
     pairs.append(new_pairs_transformed[i])
-  with open('NNdata', 'wb') as file:
+  with open('NeuralNetworkData', 'wb') as file:
     pickle.dump(pairs, file)
 
   print(f"{len(pairs)} pairings (tensor input, heatmap) in data.")
@@ -1332,12 +1333,7 @@ def main():
       # Simulate a game
       while True:
         # Make AI move according to player choice
-        try:
-          _ = test_grid.gen_AI_move(style_choice)
-        except:
-          print(i)
-          test_grid.print_grid(fog_of_war=False)
-          return
+        _ = test_grid.gen_AI_move(style_choice)
         count_AI += 1
         # Needed to update ships_remaining 
         result = test_grid.check_ship_sunk()
@@ -1347,6 +1343,16 @@ def main():
         if len(test_grid.ships_remaining) == 0: 
           rep_history.append(count_AI)
           break
+    # NN is compute-heavy so its reps are stored
+    if style_choice == 4:
+      with open('NeuralNetworkMoves', 'rb') as file:
+        previous_rep_history = pickle.load(file)  
+      for i in range(len(rep_history)):
+        previous_rep_history.append(rep_history[i])
+      with open('NeuralNetworkMoves', 'wb') as file:
+        pickle.dump(rep_history, file)
+      rep_history = previous_rep_history
+      nreps = len(rep_history) # because nreps is used in the avg calculation
     # Heatmap is compute-heavy so its reps are stored
     if style_choice == 5:
       with open('HeatmapMoves', 'rb') as file:
