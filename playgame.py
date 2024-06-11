@@ -1321,6 +1321,7 @@ def main():
     test_grid = BoardState()
     # Will hold number of moves for each rep
     rep_history = []
+    start  = time.time()
     # Get all simulation data
     for i in range(nreps):
       # Reset the board with new ship placements
@@ -1363,6 +1364,7 @@ def main():
       nreps = len(rep_history) # because nreps is used in the avg calculation
     # After all testing, show average moves for the AI to win
     clear_console()
+    print(f"Time elapsed: {time.time() - start}")
     print(f"It took the AI {sum(rep_history)/nreps} moves on average to win!")
     print(f"Number of samples: {nreps}")
 
