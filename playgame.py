@@ -20,7 +20,7 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 5 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 10 # Number of times an algorithm tests on a sample board if testing is selected
 
 H_NREPS = 5000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
 NN_NREPS = 300 # Number of new samples for NN training and validation
@@ -113,22 +113,22 @@ class mcts:
 
   def ai_mcts_move(self):
     fog_of_war = self.env.fog_of_war
-    print("Fog of War:", fog_of_war)
+    #print("Fog of War:", fog_of_war)
     percentages = self.monte_carlo(fog_of_war)
-    print("Probabilities:", percentages)
+    #print("Probabilities:", percentages)
     max_prob = -1
     move = (0, 0)
 
     if self.env.target_mode and self.env.hit_stack:
       move = self.env.hit_stack.pop()
-      print("Target mode. Move from hit stack:", move)
+      #print("Target mode. Move from hit stack:", move)
     else:
       for row in range(GRID_SIZE):
         for col in range(GRID_SIZE):
           if self.env.state[row][col] not in ('X', 'O') and percentages[row][col] > max_prob:
             max_prob = percentages[row][col]
             move = (row, col)
-      print("Selected move based on probabilities:", move)
+      #print("Selected move based on probabilities:", move)
 
     row, col = move
     if self.env.state[row][col] == '#':
@@ -137,17 +137,17 @@ class mcts:
       self.env.target_mode = True
       self.env.update_probabilities_after_hit(row, col)
       self.update_hit_stack(row, col)
-      print("Hit at:", move)
+      #print("Hit at:", move)
       sunk_ship = self.env.check_ship_sunk()
       if sunk_ship:
         self.env.hit_stack = []
         self.env.target_mode = False
-        print(f"The enemy has sunk your {sunk_ship}!")
+        #print(f"The enemy has sunk your {sunk_ship}!")
       return True
     else:
       self.env.fog_of_war[row][col] = 'O'
       self.env.state[row][col] = 'O'
-      print("Miss at:", move)
+      #print("Miss at:", move)
       self.handle_miss(row, col)
       return False
 
@@ -157,7 +157,7 @@ class mcts:
       nr, nc = row + dr, col + dc
       if self.env.is_in_bounds(nr, nc) and self.env.state[nr][nc] not in ('X', 'O'):
         self.env.hit_stack.append((nr, nc))
-    print("Updated hit stack:", self.env.hit_stack)
+    #print("Updated hit stack:", self.env.hit_stack)
 
   def handle_miss(self, row, col):
     hit_sequences = self.get_hit_sequences()
@@ -176,7 +176,7 @@ class mcts:
               self.env.hit_stack.append((r1 - 1, c1))
             if r2 < GRID_SIZE - 1 and self.env.state[r2 + 1][c1] not in ('X', 'O'):
               self.env.hit_stack.append((r2 + 1, c1))
-    print("Updated hit stack after miss:", self.env.hit_stack)
+    #print("Updated hit stack after miss:", self.env.hit_stack)
 
   def get_hit_sequences(self):
     hits = [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE) if self.env.state[r][c] == 'X']
@@ -225,6 +225,10 @@ class BoardState:
     self.searching = True if searching is None else searching
     self.network = network
 
+    self.probability_grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+    self.hit_stack = []
+    self.target_mode = False
+    self.random_mode = True
     self.samples = samples
     self.mcts = mcts(self, samples)
 
@@ -929,6 +933,18 @@ class BoardState:
       else:
         break
       i += 1
+  # Monte Carlo Sim helpers
+  def update_probabilities_after_hit(self, row: int, col: int) -> None:
+    if row > 0 and self.state[row - 1][col] not in ('X', 'O'):
+      self.probability_grid[row - 1][col] += 10
+    if row < GRID_SIZE - 1 and self.state[row + 1][col] not in ('X', 'O'):
+      self.probability_grid[row + 1][col] += 10
+    if col > 0 and self.state[row][col - 1] not in ('X', 'O'):
+      self.probability_grid[row][col - 1] += 10
+    if col < GRID_SIZE - 1 and self.state[row][col + 1] not in ('X', 'O'):
+      self.probability_grid[row][col + 1] += 10
+  def is_in_bounds(self, row: int, col: int) -> bool:
+    return 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE
   # NN helpers
   def get_heatmap(self, nreps, current_state):
     """
@@ -1312,7 +1328,10 @@ def main():
       # Simulate a game
       while True:
         # Make AI move according to player choice
-        _ = test_grid.gen_AI_move(style_choice)
+        try: 
+          _ = test_grid.gen_AI_move(style_choice)
+        except:
+          continue
         count_AI += 1
         # Needed to update ships_remaining 
         result = test_grid.check_ship_sunk()
