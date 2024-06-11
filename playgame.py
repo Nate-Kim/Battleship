@@ -20,7 +20,7 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 10 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 100 # Number of times an algorithm tests on a sample board if testing is selected
 
 H_NREPS = 5000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
 NN_NREPS = 300 # Number of new samples for NN training and validation
@@ -1110,8 +1110,7 @@ def generate_random_boards_with_heatmaps():
   global probableHuman
   hold_global = probableHuman
   probableHuman = True
-  num_moves_random = random.randint(0, 80)#30)
-  #num_moves_probabilistic = random.randint(0, 30)
+  num_moves_random = random.randint(0, 80)
 
   board = BoardState()
   data = []
@@ -1120,8 +1119,6 @@ def generate_random_boards_with_heatmaps():
       board.randomly_place_ship(ship)
     for _ in range(num_moves_random):
       board.random_move()
-    # for _ in range(num_moves_probabilistic):
-    #   board.human_sim_move()
     if len(board.ships_remaining) == 0: continue
     transformed_layout = board.transform_data()
     if board.searching: data.append((transformed_layout, board.get_probability_grid()))
@@ -1238,12 +1235,6 @@ def main():
   if GENERATE_DATA: 
     generate_data()
     return 0
-  
-  # with open('NeuralNetworkMoves', 'rb') as file:
-  #   previous_rep_history = pickle.load(file)  
-  # print(previous_rep_history)
-  # print(len(previous_rep_history))
-  # return 0
 
   global humanSimSunkResult
   # Check whether the user wants to play a game or test the AI
@@ -1341,6 +1332,18 @@ def main():
         if len(test_grid.ships_remaining) == 0: 
           rep_history.append(count_AI)
           break
+
+    # TEMP PICKLE FOR PROB GRAPH GENERATION
+    if style_choice == 3:
+      with open('ProbMoves', 'rb') as file:
+        previous_rep_history = pickle.load(file)  
+      for i in range(len(rep_history)):
+        previous_rep_history.append(rep_history[i])
+      with open('ProbMoves', 'wb') as file:
+        pickle.dump(previous_rep_history, file)
+      rep_history = previous_rep_history
+      nreps = len(rep_history) # because nreps is used in the avg calculation
+
     # NN is compute-heavy so its reps are stored
     if style_choice == 4:
       with open('NeuralNetworkMoves', 'rb') as file:
@@ -1358,7 +1361,7 @@ def main():
       for i in range(len(rep_history)):
         previous_rep_history.append(rep_history[i])
       with open('HeatmapMoves', 'wb') as file:
-        pickle.dump(rep_history, file)
+        pickle.dump(previous_rep_history, file)
       rep_history = previous_rep_history
       nreps = len(rep_history) # because nreps is used in the avg calculation
     # After all testing, show average moves for the AI to win
