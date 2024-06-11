@@ -2,6 +2,8 @@ import random
 import os
 import copy
 
+import time
+
 import numpy as np
 from tensorflow.keras.models import Sequential # type: ignore
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Reshape, Input # type: ignore
@@ -20,12 +22,12 @@ SHIPS_NAMES = ["aircraft carrier", "battleship", "cruiser", "submarine", "destro
 STR_TO_INT = {"A":0,"B":1,"C":2,"D":3,"E":4,"F":5,"G":6,"H":7,"I":8,"J":9}
 INT_TO_STR = {0:"A",1:"B",2:"C",3:"D",4:"E",5:"F",6:"G",7:"H",8:"I",9:"J"}
 PIECE_CHAR = '#'
-NREPS = 100 # Number of times an algorithm tests on a sample board if testing is selected
+NREPS = 1 # Number of times an algorithm tests on a sample board if testing is selected
 
 H_NREPS = 5000 # Number of sims for get_heatmap (more = more accurate heatmap). Used in heatmap & NN moves.
-NN_NREPS = 300 # Number of new samples for NN training and validation
+NN_NREPS = 0 # Number of new samples for NN training and validation
 GENERATE_DATA = False  # Generate more samples for NN training and validation
-EPOCHS = 200 # Number of epochs for neural network
+EPOCHS = 50 # Number of epochs for neural network
 
 """GLOBAL VARIABLES FOR HUMAN AI"""
 rowNum = 0
@@ -1090,8 +1092,18 @@ class BoardState:
     
     # Compile the model
     network.compile(optimizer='adam', loss='binary_crossentropy', metrics=['mean_squared_error'])
-    network.fit(training_data, training_labels, epochs=EPOCHS, verbose=0, validation_data=(validation_data, validation_labels))
-    network.summary()
+    history = network.fit(training_data, training_labels, epochs=EPOCHS, validation_data=(validation_data, validation_labels))
+
+    # Plot history
+    plot_MSE = False
+    if plot_MSE:
+      plt.plot(history.history['mean_squared_error'], label='Training MSE')
+      plt.plot(history.history['val_mean_squared_error'], label='Validation MSE')
+      plt.xlabel('Epoch')
+      plt.ylabel('MSE')
+      plt.title('Training and Validation MSE Across Epochs')
+      plt.legend()
+      plt.show()
   
     self.network = network
 
@@ -1319,10 +1331,7 @@ def main():
       # Simulate a game
       while True:
         # Make AI move according to player choice
-        try: 
-          _ = test_grid.gen_AI_move(style_choice)
-        except:
-          continue
+        _ = test_grid.gen_AI_move(style_choice)
         count_AI += 1
         # Needed to update ships_remaining 
         result = test_grid.check_ship_sunk()
