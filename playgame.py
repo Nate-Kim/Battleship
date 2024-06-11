@@ -1368,5 +1368,17 @@ def main():
     clear_console()
     print(f"It took the AI {sum(rep_history)/nreps} moves on average to win!")
 
+    # Plot the winning moves in a bar graph 
+    #creates bins 
+    plt.hist(rep_history, bins=range(min(rep_history), max(rep_history) + 2), edgecolor='black', align='left')
+
+    # Adds titles and labels
+    plt.title('Distribution of Winning Moves')
+    plt.xlabel('Number of Moves to Win')
+    plt.ylabel('Frequency of that Number of Moves')
+
+    # Diplays the plot
+    plt.show()
+
 if __name__ == "__main__":
   main()
