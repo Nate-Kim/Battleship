@@ -1332,18 +1332,6 @@ def main():
         if len(test_grid.ships_remaining) == 0: 
           rep_history.append(count_AI)
           break
-
-    # TEMP PICKLE FOR PROB GRAPH GENERATION
-    if style_choice == 3:
-      with open('ProbMoves', 'rb') as file:
-        previous_rep_history = pickle.load(file)  
-      for i in range(len(rep_history)):
-        previous_rep_history.append(rep_history[i])
-      with open('ProbMoves', 'wb') as file:
-        pickle.dump(previous_rep_history, file)
-      rep_history = previous_rep_history
-      nreps = len(rep_history) # because nreps is used in the avg calculation
-
     # NN is compute-heavy so its reps are stored
     if style_choice == 4:
       with open('NeuralNetworkMoves', 'rb') as file:
@@ -1367,17 +1355,13 @@ def main():
     # After all testing, show average moves for the AI to win
     clear_console()
     print(f"It took the AI {sum(rep_history)/nreps} moves on average to win!")
+    print(f"Number of samples: {nreps}")
 
     # Plot the winning moves in a bar graph 
-    #creates bins 
     plt.hist(rep_history, bins=range(min(rep_history), max(rep_history) + 2), edgecolor='black', align='left')
-
-    # Adds titles and labels
     plt.title('Distribution of Winning Moves')
     plt.xlabel('Number of Moves to Win')
     plt.ylabel('Frequency of that Number of Moves')
-
-    # Diplays the plot
     plt.show()
 
 if __name__ == "__main__":
